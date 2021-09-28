@@ -1,5 +1,5 @@
-apiVersion: batch/v1
-kind: Job
+apiVersion: apps/v1
+kind: DaemonSet
 metadata:
   name: {{ include "iperf.fullname" . }}-client
   labels:
@@ -20,7 +20,9 @@ spec:
       restartPolicy: Never
       securityContext:
         {{- toYaml .Values.client.podSecurityContext | nindent 8 }}
-      containers:
+      # Use an init container to execute the actual work
+      # That way, we know the job is complete when the daemonset becomes ready
+      initContainers:
         - name: iperf-client
           securityContext:
             {{- toYaml .Values.client.securityContext | nindent 12 }}
@@ -32,6 +34,18 @@ spec:
             {{- with .Values.client.args }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          resources:
+            {{- toYaml .Values.client.resources | nindent 12 }}
+      containers:
+        - name: pause
+          securityContext:
+            {{- toYaml .Values.client.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - bash
+            - -c
+            - "sleep infinity"
           resources:
             {{- toYaml .Values.client.resources | nindent 12 }}
       affinity:

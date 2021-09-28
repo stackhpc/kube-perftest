@@ -32,14 +32,13 @@ serverlabels="app.kubernetes.io/instance=$JOBNAME,app.kubernetes.io/component=se
 clientlabels="app.kubernetes.io/instance=$JOBNAME,app.kubernetes.io/component=client"
 
 # Print information about where the pods were scheduled
-servernode="$(kubectl get po -l $serverlabels -o go-template='{{ (index .items 0).spec.nodeName }}')"
-servernodeip="$(kubectl get po -l $serverlabels -o go-template='{{ (index .items 0).status.hostIP }}')"
-echo "[INFO] Server scheduled on node - $servernode ($servernodeip)"
-clientnode="$(kubectl get po -l $clientlabels -o go-template='{{ (index .items 0).spec.nodeName }}')"
-clientnodeip="$(kubectl get po -l $clientlabels -o go-template='{{ (index .items 0).status.hostIP }}')"
-echo "[INFO] Client scheduled on node - $clientnode ($clientnodeip)"
+echo "[INFO] Server scheduled on nodes:"
+kubectl get po -l $serverlabels --no-headers -o custom-columns=NODENAME:.spec.nodeName,NODEIP:.status.hostIP
+echo "[INFO] Clients scheduled on nodes:"
+kubectl get po -l $clientlabels --no-headers -o custom-columns=NODENAME:.spec.nodeName,NODEIP:.status.hostIP
 
 # Print the logs from the server
+echo "[INFO] Experiment results:"
 kubectl logs -l $serverlabels
 
 # Delete the resources for the job
