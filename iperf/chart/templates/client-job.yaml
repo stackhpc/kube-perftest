@@ -1,15 +1,11 @@
-apiVersion: apps/v1
-kind: DaemonSet
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: {{ include "iperf.fullname" . }}-client
   labels:
     {{- include "iperf.labels" . | nindent 4 }}
     app.kubernetes.io/component: client
 spec:
-  selector:
-    matchLabels:
-      {{- include "iperf.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: client
   template:
     metadata:
       {{- with .Values.client.podAnnotations }}
@@ -20,11 +16,12 @@ spec:
         {{- include "iperf.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: client
     spec:
+      restartPolicy: Never
+      completions: {{ .Values.client.count }}
+      parallelism: {{ .Values.client.count }}
       securityContext:
         {{- toYaml .Values.client.podSecurityContext | nindent 8 }}
-      # Use an init container to execute the actual work
-      # That way, we know the job is complete when the daemonset becomes ready
-      initContainers:
+      containers:
         - name: iperf-client
           securityContext:
             {{- toYaml .Values.client.securityContext | nindent 12 }}
@@ -38,20 +35,8 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.client.resources | nindent 12 }}
-      containers:
-        - name: pause
-          securityContext:
-            {{- toYaml .Values.client.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args:
-            - bash
-            - -c
-            - "sleep infinity"
-          resources:
-            {{- toYaml .Values.client.resources | nindent 12 }}
       affinity:
-        # Schedule the client on a different node to the server
+        # Schedule the client on a different node to the server and other clients
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
@@ -64,10 +49,6 @@ spec:
                     operator: In
                     values:
                       - {{ .Release.Name }}
-                  - key: app.kubernetes.io/component
-                    operator: In
-                    values:
-                      - server
               topologyKey: "kubernetes.io/hostname"
       {{- with .Values.client.nodeSelector }}
       nodeSelector:
