@@ -6,6 +6,8 @@ metadata:
     {{- include "iperf.labels" . | nindent 4 }}
     app.kubernetes.io/component: client
 spec:
+  completions: {{ .Values.client.count }}
+  parallelism: {{ .Values.client.count }}
   template:
     metadata:
       {{- with .Values.client.podAnnotations }}
@@ -17,8 +19,6 @@ spec:
         app.kubernetes.io/component: client
     spec:
       restartPolicy: Never
-      completions: {{ .Values.client.count }}
-      parallelism: {{ .Values.client.count }}
       securityContext:
         {{- toYaml .Values.client.podSecurityContext | nindent 8 }}
       containers:
