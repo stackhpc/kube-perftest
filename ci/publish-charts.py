@@ -170,36 +170,44 @@ def main():
     """
     Entrypoint for the script.
     """
-    # Get the directory for the specified tool
     repo_root = pathlib.Path(__file__).resolve().parent.parent
-    tool_directory = repo_root / os.environ['TOOL_NAME']
 
     # Get the version to use for deployed charts
     version, app_version, is_tag = get_version()
     print(f"[INFO] Charts will be published with version '{version}'")
 
-    # Get the paths that were changed by the curent commit
-    commit = cmd(["git", "rev-parse", "HEAD"])
-    commit_files = cmd(["git", "show", "--pretty=", "--name-only", commit])
-    changed_paths = [pathlib.Path(filename).resolve() for filename in commit_files.splitlines()]
+    # Get the charts in the repository
+    charts = [path.parent for path in repo_root.glob('**/Chart.yaml')]
 
-    # Determine whether to publish charts or not
-    # Because there are dependencies that are not actual Helm dependencies, charts are
-    # either all published together or not at all
+    # Determine which charts to publish
     if is_tag:
         # If the commit is a tag, publish all the charts regardless of changes
         # so that they get the version bump
-        print("[INFO] Detected tagged commit - publishing charts")
-    elif is_changed(tool_directory, changed_paths):
-        # If the tool was changed, publish the charts for the tool regardless of changes
-        # so that they pick up the new image for any deployment jobs
-        print("[INFO] Tool directory has changed - publishing charts")
+        print("[INFO] Detected tagged commit - publishing all charts")
     else:
-        print("[INFO] Nothing has changed - exiting without publishing charts")
-        return
+       # Get the paths that were changed by the current commit
+        commit = cmd(["git", "rev-parse", "HEAD"])
+        commit_files = cmd(["git", "show", "--pretty=", "--name-only", commit])
+        changed_paths = [
+            pathlib.Path(filename).resolve()
+            for filename in commit_files.splitlines()
+        ]
+        # Get the directories of the tools that have changed
+        changed_tools = [
+            path
+            for path in repo_root.iterdir()
+            if path.is_dir() and is_changed(path, changed_paths)
+        ]
+        # Filter the charts to include only the ones whose tools have changed
+        charts = [
+            chart
+            for chart in charts
+            if any(chart.is_relative_to(tool) for tool in changed_tools)
+        ]
 
-    # Get the charts in the repository
-    charts = [path.parent for path in tool_directory.glob('**/Chart.yaml')]
+    if not charts:
+        print("[INFO] No tools have been changed - nothing to publish")
+        return
 
     # Publish the charts and re-generate the repository index
     publish_branch = os.environ.get('PUBLISH_BRANCH', 'gh-pages')
