@@ -12,6 +12,9 @@ spec:
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      labels:
+        {{- include "iperf.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: client
     spec:
       # Don't restart the containers if they fail
       restartPolicy: Never
