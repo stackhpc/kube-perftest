@@ -1,0 +1,24 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/stackhpc/iperf
+  tag: ""  # Defaults to appVersion if not given
+  pullPolicy: IfNotPresent
+
+server:
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+client:
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []

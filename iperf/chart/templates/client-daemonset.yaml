@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "iperf.fullname" . }}-client
+  labels:
+    {{- include "iperf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: client
+spec:
+  template:
+    metadata:
+      {{- with .Values.client.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      # Don't restart the containers if they fail
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.client.podSecurityContext | nindent 8 }}
+      containers:
+        - name: iperf-client
+          securityContext:
+            {{- toYaml .Values.client.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --client
+            - {{ include "iperf.fullname" . }}-server
+          resources:
+            {{- toYaml .Values.client.resources | nindent 12 }}
+      affinity:
+        # Schedule the client on a different node to the server
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - {{ include "iperf.name" . }}
+                  - key: app.kubernetes.io/instance
+                    operator: In
+                    values:
+                      - {{ .Release.Name }}
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - server
+              topologyKey: "kubernetes.io/hostname"
+      {{- with .Values.client.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.client.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
