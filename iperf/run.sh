@@ -13,12 +13,6 @@ helm repo update >/dev/null
 # Generate a name for the job
 JOBNAME="perftest-iperf-$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 5)"
 
-# Convert the given arguments into a --set statement, if required
-if [ "$#" -gt 0 ]; then
-    args=("$@")
-    setclientargs="$(IFS=,; echo -n "--set-string client.args={${args[*]}}")"
-fi
-
 # Run the job by installing the helm chart
 echo "[INFO] Launching job with args: $@"
 helm install $JOBNAME perftest/iperf \
@@ -26,6 +20,7 @@ helm install $JOBNAME perftest/iperf \
   $setclientargs \
   --wait \
   --wait-for-jobs \
+  "$@" \
   >/dev/null
 
 serverlabels="app.kubernetes.io/instance=$JOBNAME,app.kubernetes.io/component=server"
