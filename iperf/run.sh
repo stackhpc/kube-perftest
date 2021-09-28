@@ -16,7 +16,7 @@ JOBNAME="perftest-iperf-$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 5)"
 # Convert the given arguments into a --set statement, if required
 if [ "$#" -gt 0 ]; then
     args=("$@")
-    setclientargs="$(IFS=,; echo -n "--set client.args={${args[*]}}")"
+    setclientargs="$(IFS=,; echo -n "--set-string client.args={${args[*]}}")"
 fi
 
 # Run the job by installing the helm chart
