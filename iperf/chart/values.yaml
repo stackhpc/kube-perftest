@@ -6,6 +6,8 @@ image:
   tag: ""  # Defaults to appVersion if not given
   pullPolicy: IfNotPresent
 
+hostNetwork: false
+
 server:
   podAnnotations: {}
   podSecurityContext: {}

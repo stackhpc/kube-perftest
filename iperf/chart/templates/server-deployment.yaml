@@ -20,6 +20,7 @@ spec:
         {{- include "iperf.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: server
     spec:
+      hostNetwork: {{ .Values.hostNetwork }}
       securityContext:
         {{- toYaml .Values.server.podSecurityContext | nindent 8 }}
       containers:

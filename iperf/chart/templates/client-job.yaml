@@ -17,6 +17,7 @@ spec:
         app.kubernetes.io/component: client
     spec:
       restartPolicy: Never
+      hostNetwork: {{ .Values.hostNetwork }}
       securityContext:
         {{- toYaml .Values.client.podSecurityContext | nindent 8 }}
       containers:
