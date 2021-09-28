@@ -6,7 +6,7 @@ set -ex
 ## Run the iperf performance test
 #####
 
-helm repo add perftest https://stackhpc.github.io/
+helm repo add perftest https://stackhpc.github.io/kube-perftest
 helm repo update
 
 # Generate a name for the job
