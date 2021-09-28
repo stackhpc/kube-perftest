@@ -17,7 +17,6 @@ JOBNAME="perftest-iperf-$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 5)"
 echo "[INFO] Launching job with args: $@"
 helm install $JOBNAME perftest/iperf \
   --devel \
-  $setclientargs \
   --wait \
   --wait-for-jobs \
   "$@" \
