@@ -20,8 +20,6 @@ spec:
         {{- include "iperf.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: client
     spec:
-      # Don't restart the containers if they fail
-      restartPolicy: Never
       securityContext:
         {{- toYaml .Values.client.podSecurityContext | nindent 8 }}
       # Use an init container to execute the actual work
