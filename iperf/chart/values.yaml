@@ -16,6 +16,7 @@ server:
   affinity: {}
 
 client:
+  args: []
   podAnnotations: {}
   podSecurityContext: {}
   securityContext: {}

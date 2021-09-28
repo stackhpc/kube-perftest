@@ -29,6 +29,9 @@ spec:
           args:
             - --client
             - {{ include "iperf.fullname" . }}-server
+            {{- with .Values.client.args }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           resources:
             {{- toYaml .Values.client.resources | nindent 12 }}
       affinity:
