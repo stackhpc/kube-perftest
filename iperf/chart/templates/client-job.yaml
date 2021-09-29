@@ -16,8 +16,11 @@ spec:
         {{- include "iperf.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: client
     spec:
+      {{- if .Values.hostNetwork }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
       restartPolicy: Never
-      hostNetwork: {{ .Values.hostNetwork }}
       securityContext:
         {{- toYaml .Values.client.podSecurityContext | nindent 8 }}
       containers:

@@ -20,7 +20,10 @@ spec:
         {{- include "iperf.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: server
     spec:
-      hostNetwork: {{ .Values.hostNetwork }}
+      {{- if .Values.hostNetwork }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
       securityContext:
         {{- toYaml .Values.server.podSecurityContext | nindent 8 }}
       containers:
