@@ -13,12 +13,11 @@ helm repo update >/dev/null
 # Generate a name for the job
 JOBNAME="perftest-iperf-$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 5)"
 
-hostnetwork="false"
 while [ $# -gt 0 ]; do
     case $1 in
         --host-network)
-            hostnetwork="true"
-            shift
+            echo "[INFO] Using host networking"
+            sethostnetwork="--set hostNetwork=true"
             ;;
         --)
             shift
@@ -37,10 +36,10 @@ if [ "$#" -gt 0 ]; then
 fi
 
 # Run the job by installing the helm chart
-echo "[INFO] Launching job with args: $@"
+echo "[INFO] Launching iperf job with args: $@"
 helm install $JOBNAME perftest/iperf \
   --devel \
-  --set hostNetwork=$hostNetwork \
+  $sethostnetwork \
   $setclientargs \
   --wait \
   --wait-for-jobs \
