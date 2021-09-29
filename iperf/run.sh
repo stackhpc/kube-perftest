@@ -13,6 +13,23 @@ helm repo update >/dev/null
 # Generate a name for the job
 JOBNAME="perftest-iperf-$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 5)"
 
+hostnetwork="false"
+while [ $# -gt 0 ]; do
+    case $1 in
+        --host-network)
+            hostnetwork="true"
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "[WARNING] Ignoring unknown argument - $1"
+    esac
+    shift
+done
+
 # Convert the given arguments into a --set statement, if required
 if [ "$#" -gt 0 ]; then
     args=("$@")
@@ -23,6 +40,7 @@ fi
 echo "[INFO] Launching job with args: $@"
 helm install $JOBNAME perftest/iperf \
   --devel \
+  --set hostNetwork=$hostNetwork \
   $setclientargs \
   --wait \
   --wait-for-jobs \
