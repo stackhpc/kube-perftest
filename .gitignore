@@ -1,0 +1,4 @@
+__pycache__
+kubeconfig*
+.python-version
+*.egg-info

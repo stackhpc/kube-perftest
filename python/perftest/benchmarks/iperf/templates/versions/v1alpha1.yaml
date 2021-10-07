@@ -1,0 +1,94 @@
+schema:
+  openAPIV3Schema:
+    type: object
+    properties:
+      spec:
+        type: object
+        default: {}
+        properties:
+          image:
+            type: string
+            default: ghcr.io/stackhpc/iperf:main
+          imagePullPolicy:
+            type: string
+            enum: [IfNotPresent, Always, Never]
+            default: IfNotPresent
+          hostNetwork:
+            type: boolean
+            default: false
+          duration:
+            type: integer
+            default: 30
+          streams:
+            type: integer
+            default: 8
+      status:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+        default: {}
+        properties:
+          phase:
+            type: string
+            default: New
+          finishedAt:
+            type: string
+          result:
+            type: string
+          output:
+            type: string
+          server:
+            type: object
+            properties:
+              phase:
+                type: string
+              nodeName:
+                type: string
+              nodeIP:
+                type: string
+          client:
+            type: object
+            properties:
+              phase:
+                type: string
+              nodeName:
+                type: string
+              nodeIP:
+                type: string
+additionalPrinterColumns:
+  - name: Host Network
+    type: boolean
+    jsonPath: .spec.hostNetwork
+  - name: Duration
+    type: integer
+    jsonPath: .spec.duration
+  - name: Streams
+    type: integer
+    jsonPath: .spec.streams
+  - name: Status
+    type: string
+    jsonPath: .status.phase
+  - name: Server Status
+    type: string
+    priority: 1
+    jsonPath: .status.server.phase
+  - name: Server Node
+    type: string
+    priority: 1
+    jsonPath: .status.server.nodeName
+  - name: Client Status
+    type: string
+    priority: 1
+    jsonPath: .status.client.phase
+  - name: Client Node
+    type: string
+    priority: 1
+    jsonPath: .status.client.nodeName
+  - name: Created
+    type: date
+    jsonPath: .metadata.creationTimestamp
+  - name: Finished
+    type: date
+    jsonPath: .status.finishedAt
+  - name: Result
+    type: string
+    jsonPath: .status.result
