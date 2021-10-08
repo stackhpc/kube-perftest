@@ -1,6 +1,11 @@
 name: Publish benchmark images
 # Run the tasks on every push
-on: push
+on:
+  push:
+    paths:
+      - images
+    tags:
+      - "*"
 jobs:
   build_push_images:
     name: Build and push benchmark images

@@ -184,15 +184,15 @@ def main():
             publish_directory,
             chart_directory
         ])
-    # Re-index the publish directory
-    print("[INFO] Generating Helm repository index file")
-    cmd(["helm", "repo", "index", publish_directory])
-    with working_directory(publish_directory):
-        print("[INFO] Committing changed files")
-        cmd(["git", "add", "-A"])
-        cmd(["git", "commit", "-m", f"Publishing charts for {version}"])
-        print(f"[INFO] Pushing changes to branch '{publish_branch}'")
-        cmd(["git", "push", "--set-upstream", "origin", publish_branch])
+        # Re-index the publish directory
+        print("[INFO] Generating Helm repository index file")
+        cmd(["helm", "repo", "index", publish_directory])
+        with working_directory(publish_directory):
+            print("[INFO] Committing changed files")
+            cmd(["git", "add", "-A"])
+            cmd(["git", "commit", "-m", f"Publishing charts for {version}"])
+            print(f"[INFO] Pushing changes to branch '{publish_branch}'")
+            cmd(["git", "push", "--set-upstream", "origin", publish_branch])
 
 
 if __name__ == "__main__":
