@@ -3,7 +3,8 @@ name: Publish benchmark images
 on:
   push:
     paths:
-      - images/**
+      - .github/workflows/publish-benchmark-images.yaml
+      - "images/**"
     tags:
       - "*"
 jobs:

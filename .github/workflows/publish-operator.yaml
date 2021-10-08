@@ -3,8 +3,9 @@ name: Publish operator
 on:
   push:
     paths:
-      - chart/**
-      - python/**
+      - .github/workflows/publish-operator.yaml
+      - "chart/**"
+      - "python/**"
     tags:
       - "*"
 jobs:
