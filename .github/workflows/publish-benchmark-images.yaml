@@ -1,5 +1,5 @@
 name: Publish benchmark images
-# Run the tasks on every push
+# Run the tasks on every push that changes the images and tags
 on:
   push:
     paths:

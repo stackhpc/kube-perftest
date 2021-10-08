@@ -1,6 +1,12 @@
 name: Publish operator
-# Run the tasks on every push
-on: push
+# Run the tasks on every push that changes either the operator image or chart
+on:
+  push:
+    paths:
+      - chart
+      - python
+    tags:
+      - "*"
 jobs:
   build_push_operator_image:
     name: Build and push operator image
