@@ -63,26 +63,26 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
-  # publish_charts:
-  #   name: Publish Helm charts to GitHub pages
-  #   runs-on: ubuntu-latest
-  #   # We need the image to have been built (if required) and tagged before publishing charts
-  #   needs: build_push_operator_image
-  #   steps:
-  #     - name: Check out the repository
-  #       uses: actions/checkout@v2
-  #       with:
-  #         # This is important for "git rev-list --count" to work correctly when
-  #         # determining the number of commits since the last tag
-  #         fetch-depth: 0
+  publish_charts:
+    name: Publish Helm charts to GitHub pages
+    runs-on: ubuntu-latest
+    # We need the image to have been built (if required) and tagged before publishing charts
+    needs: build_push_operator_image
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+        with:
+          # This is important for "git rev-list --count" to work correctly when
+          # determining the number of commits since the last tag
+          fetch-depth: 0
 
-  #     # Use an up-to-date version of Python for the script
-  #     - uses: actions/setup-python@v2
-  #       with:
-  #         python-version: 3.9
+      # Use an up-to-date version of Python for the script
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
 
-  #     # This action packages and pushes the chart
-  #     - name: Publish charts
-  #       run: ./ci/publish-charts.py
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # This action packages and pushes the chart
+      - name: Publish charts
+        run: ./ci/publish-charts.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
