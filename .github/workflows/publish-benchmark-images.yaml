@@ -13,6 +13,7 @@ jobs:
     strategy:
       matrix:
         include:
+          - benchmark: fio
           - benchmark: iperf
     steps:
       - name: Check out the repository
