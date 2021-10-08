@@ -83,6 +83,6 @@ jobs:
 
       # This action packages and pushes the chart
       - name: Publish charts
-        run: ./ci/publish-charts.py
+        run: ./ci/publish-chart.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

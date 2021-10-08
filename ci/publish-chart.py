@@ -60,9 +60,9 @@ SEMVER_REGEX = r"^v?(?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+)(-(?P<p
 
 def get_version():
     """
-    Returns a (version, app_version, is_tag) tuple where version is a SemVer-compliant version based on
-    Git information for the current working directory, app_version is the short-sha as used to tag the
-    utils image and is_tag is true iff the current commit is a tagged commit.
+    Returns a (version, app_version) tuple where version is a SemVer-compliant version based on
+    Git information for the current working directory and app_version is the short-sha as used
+    to tag the operator image.
     
     The version is based on the distance from the last tag and includes the name of the branch that the
     commit is on. It is is constructed such that the versions for a particular branch will order correctly.
@@ -109,8 +109,7 @@ def get_version():
     if prerelease_vn:
         version += f"-{prerelease_vn}"
 
-    # The current commit is a tagged commit if the number of commits since the last tag is zero
-    return version, app_version, commits == 0
+    return version, app_version
 
 
 def setup_publish_branch(branch, publish_directory):
@@ -161,66 +160,39 @@ def main():
     Entrypoint for the script.
     """
     repo_root = pathlib.Path(__file__).resolve().parent.parent
+    chart_directory = repo_root / "chart"
 
-    # Get the version to use for deployed charts
-    version, app_version, is_tag = get_version()
-    # Get the charts in the repository
-    charts = [path.parent for path in repo_root.glob('**/Chart.yaml')]
-
-    # Determine which charts to publish
-    if is_tag:
-        # If the commit is a tag, publish all the charts regardless of changes
-        # so that they get the version bump
-        print("[INFO] Detected tagged commit - publishing all charts")
-    else:
-        print("[INFO] Selecting changed charts only")
-        # Get the paths that were changed by the current commit
-        commit = cmd(["git", "rev-parse", "HEAD"])
-        commit_files = cmd(["git", "show", "--pretty=", "--name-only", commit])
-        changed_paths = [
-            pathlib.Path(filename).resolve()
-            for filename in commit_files.splitlines()
-        ]
-        # Filter only the charts that have actually changed
-        charts = [
-            chart
-            for chart in charts
-            if any(changed_file.is_relative_to(chart) for changed_file in changed_paths)
-        ]
-
-    if not charts:
-        print("[INFO] No charts have been changed - nothing to publish")
-        return
+    # Get the version to use for deployed chart
+    version, app_version = get_version()
 
     # Publish the charts and re-generate the repository index
     publish_branch = os.environ.get('PUBLISH_BRANCH', 'gh-pages')
-    print(f"[INFO] Charts will be published to branch '{publish_branch}'")
-    print(f"[INFO] Charts will be published with version '{version}'")
+    print(f"[INFO] Chart will be published to branch '{publish_branch}'")
+    print(f"[INFO] Chart will be published with version '{version}'")
     with tempfile.TemporaryDirectory() as publish_directory:
         setup_publish_branch(publish_branch, publish_directory)
-        for chart_directory in charts:
-            print(f"[INFO] Packaging chart in {chart_directory}")
-            cmd([
-                "helm",
-                "package",
-                "--dependency-update",
-                "--version",
-                version,
-                "--app-version",
-                app_version,
-                "--destination",
-                publish_directory,
-                chart_directory
-            ])
-        # Re-index the publish directory
-        print("[INFO] Generating Helm repository index file")
-        cmd(["helm", "repo", "index", publish_directory])
-        with working_directory(publish_directory):
-            print("[INFO] Committing changed files")
-            cmd(["git", "add", "-A"])
-            cmd(["git", "commit", "-m", f"Publishing charts for {version}"])
-            print(f"[INFO] Pushing changes to branch '{publish_branch}'")
-            cmd(["git", "push", "--set-upstream", "origin", publish_branch])
+        print(f"[INFO] Packaging chart in {chart_directory}")
+        cmd([
+            "helm",
+            "package",
+            "--dependency-update",
+            "--version",
+            version,
+            "--app-version",
+            app_version,
+            "--destination",
+            publish_directory,
+            chart_directory
+        ])
+    # Re-index the publish directory
+    print("[INFO] Generating Helm repository index file")
+    cmd(["helm", "repo", "index", publish_directory])
+    with working_directory(publish_directory):
+        print("[INFO] Committing changed files")
+        cmd(["git", "add", "-A"])
+        cmd(["git", "commit", "-m", f"Publishing charts for {version}"])
+        print(f"[INFO] Pushing changes to branch '{publish_branch}'")
+        cmd(["git", "push", "--set-upstream", "origin", publish_branch])
 
 
 if __name__ == "__main__":
