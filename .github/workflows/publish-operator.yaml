@@ -2,12 +2,14 @@ name: Publish operator
 # Run the tasks on every push that changes either the operator image or chart
 on:
   push:
+    # Note that the paths filter is not evaluated for tags, so this should run for
+    # every push to a branch that changes the operator and every tag
+    branches: ['**']
+    tags: ['**']
     paths:
       - .github/workflows/publish-operator.yaml
       - "chart/**"
       - "python/**"
-    tags:
-      - "*"
 jobs:
   build_push_operator_image:
     name: Build and push operator image
