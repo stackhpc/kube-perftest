@@ -3,8 +3,8 @@ name: Publish operator
 on:
   push:
     paths:
-      - chart
-      - python
+      - chart/**
+      - python/**
     tags:
       - "*"
 jobs:

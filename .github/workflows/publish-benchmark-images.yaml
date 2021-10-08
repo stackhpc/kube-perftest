@@ -3,7 +3,7 @@ name: Publish benchmark images
 on:
   push:
     paths:
-      - images
+      - images/**
     tags:
       - "*"
 jobs:
