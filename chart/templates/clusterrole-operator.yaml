@@ -26,5 +26,5 @@ rules:
     resources: ["jobs"]
     verbs: ["*"]
   - apiGroups: [""]
-    resources: ["services", "pods", "pods/log"]
+    resources: ["configmap", "services", "pods", "pods/log"]
     verbs: ["*"]

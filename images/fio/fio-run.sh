@@ -7,7 +7,7 @@
 
 set -e
 
-JOBS_DIRECTORY="${JOBS_DIRECTORY:-/fio-jobs}"
+JOBS_DIRECTORY="${JOBS_DIRECTORY:-/fio}"
 if [ -d "$JOBS_DIRECTORY" ]; then
     JOB_FILES="$(find $JOBS_DIRECTORY -mindepth 1 -maxdepth 1 -type f)"
 fi
