@@ -113,16 +113,6 @@ def get_version():
     return version, app_version, commits == 0
 
 
-def is_changed(path, changed_paths):
-    """
-    Returns true if the given path is in the changed paths.
-    """
-    return any(
-        changed_file.is_relative_to(pathlib.Path(path).resolve())
-        for changed_file in changed_paths
-    )
-
-
 def setup_publish_branch(branch, publish_directory):
     """
     Clones the specified branch into the specified directory.
@@ -174,8 +164,6 @@ def main():
 
     # Get the version to use for deployed charts
     version, app_version, is_tag = get_version()
-    print(f"[INFO] Charts will be published with version '{version}'")
-
     # Get the charts in the repository
     charts = [path.parent for path in repo_root.glob('**/Chart.yaml')]
 
@@ -185,33 +173,29 @@ def main():
         # so that they get the version bump
         print("[INFO] Detected tagged commit - publishing all charts")
     else:
-       # Get the paths that were changed by the current commit
+        print("[INFO] Selecting changed charts only")
+        # Get the paths that were changed by the current commit
         commit = cmd(["git", "rev-parse", "HEAD"])
         commit_files = cmd(["git", "show", "--pretty=", "--name-only", commit])
         changed_paths = [
             pathlib.Path(filename).resolve()
             for filename in commit_files.splitlines()
         ]
-        # Get the directories of the tools that have changed
-        changed_tools = [
-            path
-            for path in repo_root.iterdir()
-            if path.is_dir() and is_changed(path, changed_paths)
-        ]
-        # Filter the charts to include only the ones whose tools have changed
+        # Filter only the charts that have actually changed
         charts = [
             chart
             for chart in charts
-            if any(chart.is_relative_to(tool) for tool in changed_tools)
+            if any(changed_file.is_relative_to(chart) for changed_file in changed_paths)
         ]
 
     if not charts:
-        print("[INFO] No tools have been changed - nothing to publish")
+        print("[INFO] No charts have been changed - nothing to publish")
         return
 
     # Publish the charts and re-generate the repository index
     publish_branch = os.environ.get('PUBLISH_BRANCH', 'gh-pages')
     print(f"[INFO] Charts will be published to branch '{publish_branch}'")
+    print(f"[INFO] Charts will be published with version '{version}'")
     with tempfile.TemporaryDirectory() as publish_directory:
         setup_publish_branch(publish_branch, publish_directory)
         for chart_directory in charts:
