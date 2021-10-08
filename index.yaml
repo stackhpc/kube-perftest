@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  perftest-operator:
+  - apiVersion: v2
+    appVersion: 412e2c4
+    created: "2021-10-08T10:02:20.326036657Z"
+    description: Helm chart for deploying the perftest operator.
+    digest: 36cb9407e884e60044521a6685565d6179aeb2d9fc15d9a6d0d78f920d0a51f7
+    name: perftest-operator
+    type: application
+    urls:
+    - perftest-operator-0.1.0-dev.0.main.30.tgz
+    version: 0.1.0-dev.0.main.30
+generated: "2021-10-08T10:02:20.325412449Z"
