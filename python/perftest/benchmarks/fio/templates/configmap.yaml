@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ name }}-fio-config
+  labels:
+    {{ subresource_labels(name) | indent(4) }}
+data:
+  job.fio: |
+    [fio-job]
+    ; Parameters common to all test environments
+
+    ; Do not use fallocate. Not all the filesystem types we can test (such as 9p) support
+    ; this - which can then generate errors in the JSON datastream.
+    fallocate=none
+
+    ; Ensure that jobs run for a specified time limit, not I/O quantity
+    time_based=1
+    runtime={{ spec.runtime }}
+
+    ; Number of concurrent I/O buffers
+    ioengine=libaio
+    iodepth=8
+
+    ; Use direct unbuffered I/O
+    direct=1
+    buffered=0
+
+    ; Invalidate the page cache prior to running
+    invalidate=1
+
+    ; Start measuring performance immediately
+    ramp_time=0
+
+    ; Use processes rather than threads
+    thread=0
+    numjobs=$ncpus
+
+    ; Report per-group rather than per-job
+    group_reporting=1
+
+    ; The mode to operate in
+    rw={{ spec.mode }}
+
+    ; The blocksize to use
+    bs={{ spec.blocksize }}
+
+    ; Each file for each job thread is this size
+    size={{ spec.filesize }}g

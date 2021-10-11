@@ -1,0 +1,95 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ name }}-fio
+  labels:
+    {{ subresource_labels(name) | indent(4) }}
+spec:
+  completions: {{ spec.clients }}
+  parallelism: {{ spec.clients }}
+  template:
+    metadata:
+      labels:
+        {{ subresource_labels(name) | indent(8) }}
+    spec:
+      {%- if spec.hostNetwork %}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {%- endif %}
+      restartPolicy: Never
+      # Use an init container to wait for all the pods to be ready
+      initContainers:
+        - name: fio-init
+          image: {{ spec.image }}
+          imagePullPolicy: {{ spec.imagePullPolicy }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          args:
+            - bash
+            - -c
+            - |
+              set -e
+              # Make a lock entry for this client in the job lock directory
+              echo "[INFO] Writing lock entry for $POD_NAME"
+              LOCK_DIR="/scratch/{{ name }}.lock"
+              mkdir -p $LOCK_DIR
+              echo "READY" > $LOCK_DIR/$POD_NAME
+              # Wait for each client to make a lock entry in the directory
+              while true; do
+                num_ready="$(ls $LOCK_DIR | wc -l)"
+                if [ "$num_ready" -ge {{ spec.clients }} ]; then
+                  echo "[INFO] {{ spec.clients }} client(s) ready, starting job"
+                  break
+                fi
+                echo "[INFO] $num_ready of {{ spec.clients }} client(s) ready, waiting"
+                sleep 1
+              done
+              # Make the scratch directory for the job before starting
+              mkdir -p /scratch/$POD_NAME
+          volumeMounts:
+            - name: scratch
+              mountPath: /scratch
+      containers:
+        - name: fio
+          image: {{ spec.image }}
+          imagePullPolicy: {{ spec.imagePullPolicy }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          args:
+            - fio-run
+            - --directory=/scratch/$(POD_NAME)
+            - --output=/dev/stdout
+            - --output-format=json{% if spec.verbose %}+{% endif %}
+          volumeMounts:
+            - name: jobs
+              mountPath: /fio
+              readOnly: true
+            - name: scratch
+              mountPath: /scratch
+      volumes:
+        - name: jobs
+          configMap:
+            name: {{ name }}-fio-config
+        - name: scratch
+          persistentVolumeClaim:
+            claimName: {{ name }}-fio-scratch
+      {%- if spec.affinity %}
+      # Because these jobs are very performance sensitive, prevent the pod
+      # from being scheduled onto a node that already has an iperf component running
+      affinity:
+        {{ spec.affinity | tojson }}
+      {%- endif %}
+      {%- if spec.nodeSelector %}
+      nodeSelector:
+        {{ spec.nodeSelector | tojson }}
+      {%- endif %}
+      {%- if spec.tolerations %}
+      tolerations:
+        {{ spec.tolerations | tojson }}
+      {%- endif %}

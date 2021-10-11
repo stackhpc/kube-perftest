@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ name }}-fio-scratch
+  labels:
+    {{ subresource_labels(name) | indent(4) }}
+spec:
+  accessModes:
+    {%- if spec.clients > 1 %}
+    - ReadWriteMany
+    {%- else %}
+    - ReadWriteOnce
+    {%- endif %}
+  volumeMode: Filesystem
+  resources:
+    requests:
+      # Request enough storage for all the clients to operate in parallel
+      storage: {{ (spec.clients * spec.filesize) + 1 }}Gi
+  {%- if spec.storageClassName is not none %}
+  storageClassName: {{ spec.storageClassName }}
+  {%- endif %}

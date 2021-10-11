@@ -1,0 +1,97 @@
+schema:
+  openAPIV3Schema:
+    type: object
+    properties:
+      spec:
+        type: object
+        default: {}
+        properties:
+          image:
+            type: string
+            default: ghcr.io/stackhpc/fio:main
+          imagePullPolicy:
+            type: string
+            enum: [IfNotPresent, Always, Never]
+            default: IfNotPresent
+          hostNetwork:
+            type: boolean
+            default: false
+          clients:
+            type: integer
+            default: 1
+          mode:
+            type: string
+            enum: [read, randread, write, randwrite]
+            default: read
+          runtime:
+            type: integer
+            default: 30
+          filesize:
+            type: integer
+            default: 1
+          blocksize:
+            type: string
+            default: 4k
+          storageClassName:
+            type: string
+          verbose:
+            type: boolean
+            default: false
+      status:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+        default: {}
+        properties:
+          phase:
+            type: string
+            default: New
+          finishedAt:
+            type: string
+          summary:
+            type: string
+          results:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+          job:
+            type: object
+            properties:
+              status:
+                type: string
+              active:
+                type: integer
+              succeeded:
+                type: integer
+              failed:
+                type: integer
+additionalPrinterColumns:
+  - name: Mode
+    type: string
+    jsonPath: .spec.mode
+  - name: Clients
+    type: integer
+    jsonPath: .spec.clients
+  - name: Block Size
+    type: string
+    jsonPath: .spec.blocksize
+  - name: File Size
+    type: string
+    jsonPath: .spec.filesize
+  - name: Runtime
+    type: integer
+    jsonPath: .spec.runtime
+  - name: Status
+    type: string
+    jsonPath: .status.phase
+  - name: Job Status
+    type: string
+    priority: 1
+    jsonPath: .status.job.status
+  - name: Created
+    type: date
+    jsonPath: .metadata.creationTimestamp
+  - name: Finished
+    type: date
+    jsonPath: .status.finishedAt
+  - name: Result
+    type: string
+    jsonPath: .status.summary
