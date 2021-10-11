@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import functools
 import inspect
 
 import jinja2
@@ -177,24 +178,6 @@ class CustomResource:
             for label, value in self.subresource_labels(**kwargs).items()
         )
 
-    def get_owner_instance(self, subresource):
-        """
-        Returns the instance of this custom resource that owns the given subresource or
-        none if the instance does not exist.
-
-        This uses the labels of the given object rather than owner references as this allows
-        indirect subresources, e.g. pods of deployments owned by the instance, to be resolved
-        correctly.
-        """
-        api = kubernetes.client.CustomObjectsApi()
-        return api.get_namespaced_custom_object(
-            self.group,
-            self.current_version.name,
-            subresource['metadata']['namespace'],
-            self.plural_name,
-            subresource['metadata']['labels']["app.kubernetes.io/instance"]
-        )
-
     def apply_patch(self, namespace, name, patch):
         """
         Applies the given patch to the specified instance of this custom resource.
@@ -245,3 +228,48 @@ class CustomResource:
         labels = kwargs.pop('labels', {})
         labels.update(self.subresource_labels(component = component))
         return kopf.on.event(*args, labels = labels, **kwargs)
+
+    def on_owned_resource_event(self, *args, **kwargs):
+        """
+        Returns a decorator that registers the decorated function as a kopf event hook
+        for resources of the given group/version/kind that have an instance of this
+        custom resource as an owner.
+
+        The owner is passed to the decorated function as the 'owner' kwarg.
+        """
+        def decorator(fn):
+            @functools.wraps(fn)
+            def handler(**inner):
+                # Try to find an owner that has the same kind as this custom resource
+                metadata = inner["meta"]
+                try:
+                    name = next(
+                        owner["name"]
+                        for owner in metadata.get("ownerReferences", [])
+                        if (
+                            owner["apiVersion"].startswith(self.group) and
+                            owner["kind"] == self.kind
+                        )
+                    )
+                except StopIteration:
+                    # If there is no owner of this type, do nothing
+                    return
+                # Next, try to actually fetch the instance
+                api = kubernetes.client.CustomObjectsApi()
+                try:
+                    owner = api.get_namespaced_custom_object(
+                        self.group,
+                        self.current_version.name,
+                        metadata["namespace"],
+                        self.plural_name,
+                        name
+                    )
+                except kubernetes.client.rest.ApiException as exc:
+                    # If the instance is not found, do nothing
+                    if exc.status == 404:
+                        return
+                    else:
+                        raise
+                return fn(owner = owner, **inner)
+            return kopf.on.event(*args, **kwargs)(handler)
+        return decorator

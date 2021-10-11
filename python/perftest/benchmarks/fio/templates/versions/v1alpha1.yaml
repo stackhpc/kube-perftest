@@ -73,7 +73,7 @@ additionalPrinterColumns:
   - name: Block Size
     type: string
     jsonPath: .spec.blocksize
-  - name: File Size
+  - name: File Size (GB)
     type: string
     jsonPath: .spec.filesize
   - name: Runtime

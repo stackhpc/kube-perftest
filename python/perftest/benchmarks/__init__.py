@@ -1,4 +1,11 @@
 BENCHMARKS_API_GROUP = "perftest.stackhpc.com"
 
-from .fio import fio
-from .iperf import iperf
+
+def ALL():
+    """
+    Returns a list of the available benchmarks.
+    """
+    from .fio import fio
+    from .iperf import iperf
+    from .suite import suite
+    return [fio, iperf, suite]
