@@ -45,4 +45,4 @@ data:
     bs={{ spec.blocksize }}
 
     ; Each file for each job thread is this size
-    size={{ spec.filesize }}g
+    size={{ spec.filesize }}

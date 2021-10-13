@@ -80,11 +80,13 @@ class CustomResource:
                 loader = jinja2.PackageLoader(self.template_module_name),
                 autoescape = False
             )
-            # Register an additional filter for rendering subresource labels
+            # Register a filter that converts the given object to YAML
+            self.__env.filters['toyaml'] = yaml.safe_dump
+            # Register a template function for rendering subresource labels
             def subresource_labels(name = None, component = None):
                 return yaml.safe_dump(self.subresource_labels(name = name, component = component))
             self.__env.globals['subresource_labels'] = subresource_labels
-            # Also register a filter that produces match expressions for subresource labels for
+            # Also register a function that produces match expressions for subresource labels for
             # use in pod [anti]affinity rules
             def match_expressions(name = None, component = None):
                 labels = self.subresource_labels(name = name, component = component)

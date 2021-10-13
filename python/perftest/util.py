@@ -104,3 +104,41 @@ def job_phase(job):
         return JobPhase.SUCCEEDED if succeeded >= completions else JobPhase.FAILED
     else:
         return JobPhase.RUNNING if active > 0 else JobPhase.PENDING
+
+
+class PodPhase:
+    """
+    Possible phases for a pod.
+    """
+    # Represents the period before a pod is scheduled
+    SCHEDULING   = "Scheduling"
+    # Represents the period between being scheduled and being ready
+    # E.g. pulling images, running init containers and waiting for probes
+    INITIALISING = "Initialising"
+    # Represents the period that a pod is running and ready
+    READY        = "Ready"
+    # Represents a pod that has exited successfully
+    SUCCEEDED    = "Succeeded"
+    # Represents a pod that has exited with a failure
+    FAILED       = "Failed"
+    # Catch-all for all other statuses
+    UNKNOWN      = "Unknown"
+
+
+def pod_phase(pod):
+    """
+    Returns the phase for a pod.
+    """
+    # We want to subdivide the running status into initialising and ready
+    # depending on whether the init containers have completed and readiness
+    # probes are succeeding
+    phase = pod["status"]["phase"]
+    conditions = pod["status"].get("conditions", [])
+    scheduled = any(c["type"] == "PodScheduled" and c["status"] == "True" for c in conditions)
+    ready = any(c["type"] == "Ready" and c["status"] == "True" for c in conditions)
+    if phase == "Pending":
+        return PodPhase.INITIALISING if scheduled else PodPhase.SCHEDULING
+    elif phase == "Running":
+        return PodPhase.READY if ready else PodPhase.INITIALISING
+    else:
+        return phase
