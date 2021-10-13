@@ -27,8 +27,8 @@ DATA_DIR="${WORK_DIR}/${POD_NAME}"
 
 # Wait for each client to make an entry in the lock directory before proceeding
 rm -rf $LOCK_DIR
-mkdir -p $LOCK_DIR
 while true; do
+    mkdir -p $LOCK_DIR
     echo "READY" > "${LOCK_DIR}/${POD_NAME}"
     if [ "$(ls $LOCK_DIR | wc -l)" -ge "$NUM_CLIENTS" ]; then
         break
