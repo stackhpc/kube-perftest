@@ -14,7 +14,7 @@ if [ -d "$CONF_DIRECTORY" ]; then
 fi
 
 # Extract the given directory from the arguments without consuming them
-DIRECTORY="$PWD"
+DIRECTORY=
 for arg in "$@"; do
     case "$arg" in
         --directory=*)
@@ -23,8 +23,15 @@ for arg in "$@"; do
     esac
 done
 
+# Make sure the directory exists before starting
+if [ -n "$DIRECTORY" ]; then
+    mkdir -p $DIRECTORY
+fi
+
 # Execute FIO with the given arguments
 fio "$@" $JOB_FILES
 
 # Clean up the directory afterwards
-rm -rf "$DIRECTORY"
+if [ -n "$DIRECTORY" ]; then
+    rm -rf "$DIRECTORY"
+fi
