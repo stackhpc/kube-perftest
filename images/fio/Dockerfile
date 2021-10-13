@@ -6,8 +6,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install the setup and run scripts
-COPY fio-setup.sh  /usr/local/bin/fio-setup
-COPY fio-run.sh    /usr/local/bin/fio-run
+COPY fio-prepare.sh  /usr/local/bin/fio-prepare
+COPY fio-run.sh      /usr/local/bin/fio-run
 
 ENTRYPOINT ["tini", "-g", "--"]
 CMD ["fio-run"]
