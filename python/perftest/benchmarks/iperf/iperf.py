@@ -4,7 +4,6 @@ import kopf
 import kubernetes
 
 from ... import custom_resource, util
-from .. import BENCHMARKS_API_GROUP
 
 
 class Phase:
@@ -18,12 +17,7 @@ class Phase:
     UNKNOWN   = "Unknown"
 
 
-#: Benchmark implementation that runs iPerf
-iperf = custom_resource.CustomResource(
-    group = BENCHMARKS_API_GROUP,
-    versions = (custom_resource.Version('v1alpha1'), ),
-    kind = 'IPerf'
-)
+iperf = custom_resource.CustomResource.initialise_from_template("crd.yaml")
 
 
 @iperf.on_create()

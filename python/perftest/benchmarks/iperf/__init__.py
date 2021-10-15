@@ -1,1 +1,1 @@
-from .iperf import iperf
+from . import iperf

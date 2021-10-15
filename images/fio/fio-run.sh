@@ -55,8 +55,10 @@ done
 # Execute fio
 fio "$CONFIG_FILE" --directory="$DATA_DIR" --output=/dev/stdout --output-format=json+
 
-# Always clean the lock directory
-rm -rf "$LOCK_DIR"
+# Each pod removes it's own lock file
+rm "${LOCK_DIR}/${POD_NAME}"
+# The last one out removes the directory
+rmdir "$LOCK_DIR" || true
 # In write mode, remove the whole data directory
 if [[ "$MODE" == *write ]]; then
     rm -rf "$DATA_DIR"
