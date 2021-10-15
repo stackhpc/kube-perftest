@@ -26,7 +26,7 @@ fi
 
 # For a read job, use the same data directory for all clients
 # For a write job, each pod gets it's own directory
-if [ "$MODE" == *read ]; then
+if [[ "$MODE" == *read ]]; then
     DATA_DIR="${WORK_DIR}/read"
 else
     DATA_DIR="${WORK_DIR}/${POD_NAME}"
@@ -57,6 +57,6 @@ rm -rf "$LOCK_DIR"
 fio "$CONFIG_FILE" --directory="$DATA_DIR" --output=/dev/stdout --output-format=json+
 
 # When running in write mode, clean up the directory
-if [ "$MODE" == *write ]; then
+if [[ "$MODE" == *write ]]; then
     rm -rf $DATA_DIR
 fi
