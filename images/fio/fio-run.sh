@@ -58,4 +58,6 @@ fio "$CONFIG_FILE" --directory="$DATA_DIR" --output=/dev/stdout --output-format=
 # Always clean the lock directory
 rm -rf "$LOCK_DIR"
 # In write mode, remove the whole data directory
-[[ "$MODE" == *write ]] && rm -rf "$DATA_DIR"
+if [[ "$MODE" == *write ]]; then
+    rm -rf "$DATA_DIR"
+fi
