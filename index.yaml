@@ -2,8 +2,18 @@ apiVersion: v1
 entries:
   perftest-operator:
   - apiVersion: v2
+    appVersion: 1690cdd
+    created: "2021-10-15T10:34:53.704004574Z"
+    description: Helm chart for deploying the perftest operator.
+    digest: 4aa28d083bd3d57c18f3349c2b19274cf6967c5f7893abe482b296177f0fe3bb
+    name: perftest-operator
+    type: application
+    urls:
+    - perftest-operator-0.1.0-dev.0.main.55.tgz
+    version: 0.1.0-dev.0.main.55
+  - apiVersion: v2
     appVersion: 207ddfe
-    created: "2021-10-13T13:56:34.969365803Z"
+    created: "2021-10-15T10:34:53.703614771Z"
     description: Helm chart for deploying the perftest operator.
     digest: dbd970913f30e4e0945cb4681ec8428d22ed5225352011a2563e40f081f39c4a
     name: perftest-operator
@@ -13,7 +23,7 @@ entries:
     version: 0.1.0-dev.0.main.52
   - apiVersion: v2
     appVersion: ee0a5f6
-    created: "2021-10-13T13:56:34.968999703Z"
+    created: "2021-10-15T10:34:53.703169867Z"
     description: Helm chart for deploying the perftest operator.
     digest: 0c5a9b38ae6abe012a6eb8e28507b820c116d4a362c0927d84b3c667d900282e
     name: perftest-operator
@@ -23,7 +33,7 @@ entries:
     version: 0.1.0-dev.0.main.47
   - apiVersion: v2
     appVersion: 6041d3e
-    created: "2021-10-13T13:56:34.9678455Z"
+    created: "2021-10-15T10:34:53.702711964Z"
     description: Helm chart for deploying the perftest operator.
     digest: a5df3a59531db083d0dcd0bccbfc31fb84dcf42534b19847e3dbb96f86757e01
     name: perftest-operator
@@ -33,7 +43,7 @@ entries:
     version: 0.1.0-dev.0.main.46
   - apiVersion: v2
     appVersion: 3ef9e61
-    created: "2021-10-13T13:56:34.965765596Z"
+    created: "2021-10-15T10:34:53.68994127Z"
     description: Helm chart for deploying the perftest operator.
     digest: 6e5fc53e729de86abd16246f952a22f7f8ab8f8bf10cc173da74c4b9c7bc4eba
     name: perftest-operator
@@ -43,7 +53,7 @@ entries:
     version: 0.1.0-dev.0.main.42
   - apiVersion: v2
     appVersion: 412e2c4
-    created: "2021-10-13T13:56:34.965375295Z"
+    created: "2021-10-15T10:34:53.689602167Z"
     description: Helm chart for deploying the perftest operator.
     digest: 36cb9407e884e60044521a6685565d6179aeb2d9fc15d9a6d0d78f920d0a51f7
     name: perftest-operator
@@ -51,4 +61,4 @@ entries:
     urls:
     - perftest-operator-0.1.0-dev.0.main.30.tgz
     version: 0.1.0-dev.0.main.30
-generated: "2021-10-13T13:56:34.964693293Z"
+generated: "2021-10-15T10:34:53.689027563Z"
