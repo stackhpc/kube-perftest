@@ -1,0 +1,187 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: fios.perftest.stackhpc.com
+spec:
+  group: perftest.stackhpc.com
+  scope: Namespaced
+  names:
+    plural: fios
+    kind: Fio
+  versions:
+    - name: v1alpha1
+      deprecated: false
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              properties:
+                image:
+                  type: string
+                  default: ghcr.io/stackhpc/fio:main
+                imagePullPolicy:
+                  type: string
+                  enum: [IfNotPresent, Always, Never]
+                  default: IfNotPresent
+                hostNetwork:
+                  type: boolean
+                  default: false
+                clients:
+                  type: integer
+                  default: 1
+                mode:
+                  type: string
+                  enum: [read, randread, write, randwrite]
+                  default: read
+                runtime:
+                  type: integer
+                  default: 30
+                filesize:
+                  type: string
+                  default: 1g
+                blocksize:
+                  type: integer
+                  default: 4096
+                resources:
+                  type: object
+                  properties:
+                    limits:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    requests:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                podSecurityContext:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                volumeClaimName:
+                  type: string
+                volumeClaimTemplate:
+                  type: object
+                  required: [spec]
+                  properties:
+                    metadata:
+                      type: object
+                      properties:
+                        labels:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        annotations:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true                  
+                    spec:
+                      type: object
+                      required: [resources]
+                      properties:
+                        resources:
+                          type: object
+                          required: [requests]
+                          properties:
+                            requests:
+                              type: object
+                              required: [storage]
+                              properties:
+                                storage:
+                                  type: string
+                        storageClassName:
+                          type: string
+                        volumeName:
+                          type: string
+                        selector:
+                          type: object
+                          properties:
+                            matchLabels:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                            matchExpressions:
+                              type: array
+                              items:
+                                x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+              default: {}
+              properties:
+                phase:
+                  type: string
+                  default: New
+                finishedAt:
+                  type: string
+                summary:
+                  type: object
+                  properties:
+                    bandwidth:
+                      type: number
+                    iops:
+                      type: number
+                    latency:
+                      type: number
+                results:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  additionalProperties:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                pvc:
+                  type: object
+                  properties:
+                    managed:
+                      type: boolean
+                    phase:
+                      type: string
+                job:
+                  type: object
+                  properties:
+                    phase:
+                      type: string
+                pods:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  additionalProperties:
+                    type: object
+                    properties:
+                      phase:
+                        type: string
+                      nodeName:
+                        type: string
+                      nodeIP:
+                        type: string
+      additionalPrinterColumns:
+        - name: Mode
+          type: string
+          jsonPath: .spec.mode
+        - name: Clients
+          type: integer
+          jsonPath: .spec.clients
+        - name: Block Size
+          type: string
+          jsonPath: .spec.blocksize
+        - name: File Size
+          type: string
+          jsonPath: .spec.filesize
+        - name: Runtime
+          type: integer
+          jsonPath: .spec.runtime
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Created
+          type: date
+          jsonPath: .metadata.creationTimestamp
+        - name: Finished
+          type: date
+          jsonPath: .status.finishedAt
+        - name: Bandwidth
+          type: number
+          jsonPath: .status.summary.bandwidth
+        - name: IOPS
+          type: number
+          jsonPath: .status.summary.iops
+        - name: Latency
+          type: number
+          jsonPath: .status.summary.latency

@@ -73,15 +73,13 @@ spec:
         - name: scratch
           persistentVolumeClaim:
             claimName: {{ pvc_name }}
-      {%- if spec.affinity %}
+      # Set up the affinity rules so that it is a preference to schedule pods on different nodes
       affinity:
-        {{ spec.affinity | toyaml | indent(8) }}
-      {%- endif %}
-      {%- if spec.nodeSelector %}
-      nodeSelector:
-        {{ spec.nodeSelector | toyaml | indent(8) }}
-      {%- endif %}
-      {%- if spec.tolerations %}
-      tolerations:
-        {{ spec.tolerations | toyaml | indent(8) }}
-      {%- endif %}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    {{ match_expressions(name) | indent(20) }}
+                topologyKey: "kubernetes.io/hostname"
