@@ -1,1 +1,1 @@
-from .fio import fio
+from . import fio

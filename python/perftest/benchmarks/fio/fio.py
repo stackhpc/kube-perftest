@@ -5,7 +5,6 @@ import kopf
 import kubernetes
 
 from ... import custom_resource, util
-from .. import BENCHMARKS_API_GROUP
 
 
 class Phase:
@@ -21,11 +20,7 @@ class Phase:
 
 
 #: Benchmark implementation that runs fio
-fio = custom_resource.CustomResource(
-    group = BENCHMARKS_API_GROUP,
-    versions = (custom_resource.Version("v1alpha1"), ),
-    kind = "Fio"
-)
+fio = custom_resource.CustomResource.initialise_from_template("crds/fio.yaml")
 
 
 @fio.on_create()
@@ -33,26 +28,33 @@ def on_create(namespace, name, spec, patch, **kwargs):
     """
     Executes when a new fio benchmark is created.
     """
+    # Check that either a claim name or template is specified
+    if not spec.get("volumeClaimName") and not spec.get("volumeClaimTemplate"):
+        raise kopf.PermanentError("One of volumeClaimName or volumeClaimTemplate is required")
     # Create the configmap with the job configuration
     config_map = fio.from_template("configmap.yaml", name = name, spec = spec)
     kopf.adopt(config_map)
     corev1 = kubernetes.client.CoreV1Api()
     with util.suppress_already_exists():
         corev1.create_namespaced_config_map(namespace, config_map)
-    # Create the PVC using the template
-    pvc = spec['volumeClaimTemplate']
-    # Add the required name
-    pvc.setdefault("metadata", {})["name"] = f"{name}-fio-scratch"
-    # Add the labels that make it a subresource
-    subresource_labels = fio.subresource_labels(name = name)
-    pvc.setdefault("metadata", {}).setdefault("labels", {}).update(subresource_labels)
-    # Set the access mode correctly - more than one client requires RWX
-    pvc["spec"]["accessModes"] = ["ReadWriteMany" if spec["clients"] > 1 else "ReadWriteOnce"]
-    kopf.adopt(pvc)
-    with util.suppress_already_exists():
-        corev1.create_namespaced_persistent_volume_claim(namespace, pvc)
+    # If a PVC name is given, that takes precedence over a managed PVC
+    pvc_name = spec.get("volumeClaimName")
+    if not pvc_name:
+        # Create the PVC using the template
+        pvc_name = f"{name}-fio-scratch"
+        pvc = spec["volumeClaimTemplate"]
+        # Add the required name
+        pvc.setdefault("metadata", {})["name"] = pvc_name
+        # Add the labels that make it a subresource
+        subresource_labels = fio.subresource_labels(name = name)
+        pvc.setdefault("metadata", {}).setdefault("labels", {}).update(subresource_labels)
+        # Set the access mode correctly - more than one client requires RWX
+        pvc["spec"]["accessModes"] = ["ReadWriteMany" if spec["clients"] > 1 else "ReadWriteOnce"]
+        kopf.adopt(pvc)
+        with util.suppress_already_exists():
+            corev1.create_namespaced_persistent_volume_claim(namespace, pvc)
     # Create the job
-    job = fio.from_template("job.yaml", name = name, spec = spec)
+    job = fio.from_template("job.yaml", name = name, pvc_name = pvc_name, spec = spec)
     kopf.adopt(job)
     batchv1 = kubernetes.client.BatchV1Api()
     with util.suppress_already_exists():
@@ -90,7 +92,7 @@ def on_phase_changed(namespace, name, spec, status, **kwargs):
 @fio.on_update(field = "status.pvc")
 @fio.on_update(field = "status.job")
 @fio.on_update(field = "status.pods")
-def on_component_phase_changed(status, patch, **kwargs):
+def on_component_phase_changed(spec, status, patch, **kwargs):
     """
     Executes when the status of one of the components of a fio benchmark changes.
     """
@@ -98,11 +100,15 @@ def on_component_phase_changed(status, patch, **kwargs):
     # Once the phase has transitioned to succeeded or failed, we are done
     if phase in { Phase.SUCCEEDED, Phase.FAILED }:
         return
+    managed_pvc = not spec.get("volumeClaimName")
     pvc_phase = status.get("pvc", {}).get("phase", "Pending")
     job_phase = status.get("job", {}).get("phase", "Pending")
     pod_phases = { p["phase"] for p in status.get("pods", {}).values() }
-    if pvc_phase == "Pending" or job_phase == util.JobPhase.PENDING:
-        # If either component is pending, so is the overall phase
+    if managed_pvc and pvc_phase == "Pending":
+        # If we are managing a PVC and it is pending, then the whole benchmark is pending
+        next_phase = Phase.PENDING
+    elif job_phase == util.JobPhase.PENDING:
+        # If the job is pending, then the benchmark is pending
         next_phase = Phase.PENDING
     elif job_phase == util.JobPhase.RUNNING:
         # The job becomes running once there is at least one pod that is "active"

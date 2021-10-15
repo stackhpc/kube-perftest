@@ -16,17 +16,19 @@ spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       {%- endif %}
+      {%- if spec.podSecurityContext %}
+      securityContext:
+        {{ spec.podSecurityContext | toyaml | indent(8) }}
+      {%- endif %}
       restartPolicy: Never
       containers:
         - name: fio
           image: {{ spec.image }}
           imagePullPolicy: {{ spec.imagePullPolicy }}
           env:
-            - name: MODE
-              value: {{ spec.mode }}
             - name: NUM_CLIENTS
               value: "{{ spec.clients }}"
-            - name: BENCHMARK_NAME
+            - name: JOB_NAME
               value: {{ name }}
             - name: POD_NAME
               valueFrom:
@@ -39,34 +41,38 @@ spec:
             - name: scratch
               mountPath: /scratch
           # The container has successfully started once the data directory exists
-          livenessProbe:
-            exec:
-              command:
-                - bash
-                - -c
-                - "test -f /scratch/${POD_NAME}/RUNNING"
-          readinessProbe:
-            exec:
-              command:
-                - bash
-                - -c
-                - "test -f /scratch/${POD_NAME}/RUNNING"
-          startupProbe:
-            exec:
-              command:
-                - bash
-                - -c
-                - "test -f /scratch/${POD_NAME}/RUNNING"
-            # Allow up to 10m for the pods to synchronise
-            periodSeconds: 1
-            failureThreshold: 600
+          # livenessProbe:
+          #   exec:
+          #     command:
+          #       - bash
+          #       - -c
+          #       - "test -f /scratch/${POD_NAME}/RUNNING"
+          # readinessProbe:
+          #   exec:
+          #     command:
+          #       - bash
+          #       - -c
+          #       - "test -f /scratch/${POD_NAME}/RUNNING"
+          # startupProbe:
+          #   exec:
+          #     command:
+          #       - bash
+          #       - -c
+          #       - "test -f /scratch/${POD_NAME}/RUNNING"
+          #   # Allow up to 10m for the pods to synchronise
+          #   periodSeconds: 1
+          #   failureThreshold: 600
+          {%- if spec.resources %}
+          resources:
+            {{ spec.resources | toyaml | indent(12) }}
+          {%- endif %}
       volumes:
         - name: jobs
           configMap:
             name: {{ name }}-fio-config
         - name: scratch
           persistentVolumeClaim:
-            claimName: {{ name }}-fio-scratch
+            claimName: {{ pvc_name }}
       {%- if spec.affinity %}
       affinity:
         {{ spec.affinity | toyaml | indent(8) }}

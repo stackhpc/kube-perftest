@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import functools
 import inspect
 
@@ -8,54 +7,87 @@ import kubernetes
 import yaml
 
 
-@dataclass
-class Version:
-    """
-    Class representing an API version for a custom resource.
-    """
-    #: The name of the version
-    name: str
-    #: Indicates if the version is deprecated
-    deprecated: bool = False
-    #: Indicates if the version should be served
-    served: bool = True
-
-    def __post_init__(self):
-        # If a version is not being served, it should also be deprecated
-        if not self.served and not self.deprecated:
-            raise ValueError('CRD versions should be deprecated before stopping serving')
-
-
 class CustomResource:
     """
     Class for defining a custom resource.
     """
-    def __init__(
-        self,
-        *,
-        group,
-        versions,
-        kind,
-        singular_name = None,
-        plural_name = None,
-        short_names = None,
-        template_module_name = None
-    ):
-        self.group = group
-        self.versions = versions
-        self.current_version = versions[-1]
-        self.kind = kind
-        self.singular_name = singular_name or self.kind.lower()
-        self.plural_name = plural_name or f"{self.singular_name}s"
-        self.short_names = short_names or []
-        # If no template module was given, detect it using the call stack
-        if not template_module_name:
-            frame = inspect.stack()[1][0]
-            module = inspect.getmodule(frame)
+    @classmethod
+    def initialise_from_template(cls, template, env = None):
+        """
+        Returns a custom resource object that uses the given template as a source.
+
+        This assumes that the calling module has a "templates" directory alongside it.
+        This behaviour can be overridden by passing a template environment.
+        """
+        if not env:
             # Assume that the module containing the calling code is a submodule
             # of the module containing the templates directory
-            template_module_name = module.__name__.rsplit(".", maxsplit = 1)[0]
-        self.template_module_name = template_module_name
+            frame = inspect.stack()[1][0]
+            module = inspect.getmodule(frame)
+            loader = jinja2.PackageLoader(module.__name__.rsplit(".", maxsplit = 1)[0])
+            env = jinja2.Environment(loader = loader, autoescape = False)
+        # Render the given template and extract the result as YAML
+        crd_definition = yaml.safe_load(env.get_template(template).render())
+        # Initialise and return a custom resource object
+        resource = cls(
+            crd_definition["spec"]["group"],
+            next(
+                v["name"]
+                for v in crd_definition["spec"]["versions"]
+                if v["storage"]
+            ),
+            crd_definition["spec"]["names"]["kind"],
+            crd_definition["spec"]["names"]["plural"],
+            crd_definition["spec"]["names"].get("singular"),
+            env
+        )
+        # Register a kopf startup hook to register the CRD
+        def register_crd(**kwargs):
+            kopf.login_via_client(**kwargs)
+            # Create or update the CRD in the target cluster
+            apiextensionsv1 = kubernetes.client.ApiextensionsV1Api()
+            crd_name = crd_definition["metadata"]["name"]
+            try:
+                apiextensionsv1.read_custom_resource_definition(crd_name)
+            except kubernetes.client.rest.ApiException as exc:
+                if exc.status != 404:
+                    raise
+                apiextensionsv1.create_custom_resource_definition(crd_definition)
+            else:
+                apiextensionsv1.patch_custom_resource_definition(crd_name, crd_definition)
+        kopf.on.startup()(register_crd)
+        return resource       
+
+    def __init__(
+        self,
+        group,
+        version,
+        kind,
+        plural_name,
+        singular_name,
+        env
+    ):
+        self.group = group
+        self.version = version
+        self.kind = kind
+        self.plural_name = plural_name
+        self.singular_name = singular_name or self.kind.lower()
+        self.env = env
+        # Register a filter that converts the given object to YAML
+        self.env.filters["toyaml"] = yaml.safe_dump
+        # Register a template function for rendering subresource labels
+        def subresource_labels(name = None, component = None):
+            return yaml.safe_dump(self.subresource_labels(name = name, component = component))
+        self.env.globals["subresource_labels"] = subresource_labels
+        # Also register a function that produces match expressions for subresource labels for
+        # use in pod [anti]affinity rules
+        def match_expressions(name = None, component = None):
+            labels = self.subresource_labels(name = name, component = component)
+            return yaml.safe_dump([
+                dict(key = label, operator = "In", values = [value])
+                for label, value in labels.items()
+            ])
+        self.env.globals["match_expressions"] = match_expressions        
 
     @property
     def full_name(self):
@@ -64,95 +96,11 @@ class CustomResource:
         """
         return f"{self.plural_name}.{self.group}"
 
-    @property
-    def env(self):
-        """
-        A Jinja2 environment for this custom resource.
-
-        The environment is lazy-loaded when first requested and cached for the duration
-        of the object.
-
-        Assumes that this custom resource is defined in a submodule of a module that also
-        contains a templates directory.
-        """
-        if not hasattr(self, '__env'):
-            self.__env = jinja2.Environment(
-                loader = jinja2.PackageLoader(self.template_module_name),
-                autoescape = False
-            )
-            # Register a filter that converts the given object to YAML
-            self.__env.filters['toyaml'] = yaml.safe_dump
-            # Register a template function for rendering subresource labels
-            def subresource_labels(name = None, component = None):
-                return yaml.safe_dump(self.subresource_labels(name = name, component = component))
-            self.__env.globals['subresource_labels'] = subresource_labels
-            # Also register a function that produces match expressions for subresource labels for
-            # use in pod [anti]affinity rules
-            def match_expressions(name = None, component = None):
-                labels = self.subresource_labels(name = name, component = component)
-                return yaml.safe_dump([
-                    dict(key = label, operator = "In", values = [value])
-                    for label, value in labels.items()
-                ])
-            self.__env.globals['match_expressions'] = match_expressions
-        return self.__env
-
     def from_template(self, template, **kwargs):
         """
         Renders the given template with the given kwargs, loads the result as YAML and returns it.
         """
         return yaml.safe_load(self.env.get_template(template).render(**kwargs))
-
-    def make_crd(self):
-        """
-        Returns a CRD for this custom resource.
-        """
-        crd_versions = []
-        for version in self.versions:
-            crd_version = self.from_template(f"versions/{version.name}.yaml")
-            crd_version.update(
-                name = version.name,
-                deprecated = version.deprecated,
-                served = version.served,
-                storage = version == self.current_version
-            )
-            crd_versions.append(crd_version)
-        return {
-            "apiVersion": "apiextensions.k8s.io/v1",
-            "kind": "CustomResourceDefinition",
-            "metadata": {
-                "name": self.full_name,
-            },
-            "spec": {
-                "group": self.group,
-                "scope": "Namespaced",
-                "names": {
-                    "plural": self.plural_name,
-                    "singular": self.singular_name,
-                    "kind": self.kind,
-                    "shortNames": self.short_names,
-                },
-                "versions": crd_versions,
-            },
-        }
-
-    def register_crd(self):
-        """
-        Registers the CRD for this custom resource with Kubernetes.
-
-        Assumes that the Kubernetes client is already configured.
-        """
-        api = kubernetes.client.ApiextensionsV1Api()
-        crd = self.make_crd()
-        crd_name = crd['metadata']['name']
-        try:
-            api.read_custom_resource_definition(crd_name)
-        except kubernetes.client.rest.ApiException as exc:
-            if exc.status != 404:
-                raise
-            api.create_custom_resource_definition(crd)
-        else:
-            api.patch_custom_resource_definition(crd_name, crd)
 
     def subresource_labels(self, *, name = None, component = None):
         """
@@ -187,7 +135,7 @@ class CustomResource:
         api = kubernetes.client.CustomObjectsApi()
         api.patch_namespaced_custom_object(
             self.group,
-            self.current_version.name,
+            self.version,
             namespace,
             self.plural_name,
             name,
@@ -199,14 +147,14 @@ class CustomResource:
         Returns a decorator that registers the decorated function as a kopf create hook
         for this custom resource.
         """
-        return kopf.on.create(self.group, self.current_version.name, self.plural_name, **kwargs)
+        return kopf.on.create(self.group, self.version, self.plural_name, **kwargs)
 
     def on_delete(self, **kwargs):
         """
         Returns a decorator that registers the decorated function as a kopf delete hook
         for this custom resource.
         """
-        return kopf.on.delete(self.group, self.current_version.name, self.plural_name, **kwargs)
+        return kopf.on.delete(self.group, self.version, self.plural_name, **kwargs)
 
     def on_update(self, **kwargs):
         """
@@ -215,7 +163,7 @@ class CustomResource:
 
         Optionally, a trigger field can be specified with an optional trigger value.
         """
-        return kopf.on.update(self.group, self.current_version.name, self.plural_name, **kwargs)
+        return kopf.on.update(self.group, self.version, self.plural_name, **kwargs)
 
     def on_subresource_event(self, *args, component = None, **kwargs):
         """
@@ -227,7 +175,7 @@ class CustomResource:
         This is acheived by filtering the subresources based on the labels for this
         custom resource.
         """
-        labels = kwargs.pop('labels', {})
+        labels = kwargs.pop("labels", {})
         labels.update(self.subresource_labels(component = component))
         return kopf.on.event(*args, labels = labels, **kwargs)
 
@@ -261,7 +209,7 @@ class CustomResource:
                 try:
                     owner = api.get_namespaced_custom_object(
                         self.group,
-                        self.current_version.name,
+                        self.version,
                         metadata["namespace"],
                         self.plural_name,
                         name

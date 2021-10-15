@@ -25,7 +25,7 @@ if [ -z "$POD_NAME" ]; then
 fi
 
 # For a read job, use the same data directory for all clients
-# For a write job, each pod gets it's own directory
+# For a write job, each client gets it's own directory
 if [[ "$MODE" == *read ]]; then
     DATA_DIR="${WORK_DIR}/read"
 else
@@ -33,13 +33,18 @@ else
 fi
 mkdir -p "$DATA_DIR"
 
-# We also need a job-specific directory for the lock files
-LOCK_DIR="${WORK_DIR}/${JOB_NAME}.lock"
+# For read mode jobs, one client is designated to prepare the files
+# The first client to create the sentinel file in the DATA_DIR wins
+if [[ "$MODE" == *read ]] && [ ! -f "$DATA_DIR/.lock" ]; then
+    touch "$DATA_DIR/.lock"
+    fio "$CONFIG_FILE" --create_only=1 --directory="$DATA_DIR" 1>/dev/null
+    rm "$DATA_DIR/.lock"
+fi
 
-# Wait for each client to make an entry in the sync directory before proceeding
-rm -rf "$LOCK_DIR"
+# Wait for each client to make an entry in the lock directory for the job before proceeding
+LOCK_DIR="${WORK_DIR}/${JOB_NAME}.lock"
+mkdir -p "$LOCK_DIR"
 while true; do
-    mkdir -p "$LOCK_DIR"
     touch "${LOCK_DIR}/${POD_NAME}"
     if [ "$(ls $LOCK_DIR | wc -l)" -ge "$NUM_CLIENTS" ]; then
         break
@@ -47,16 +52,10 @@ while true; do
     sleep 1
 done
 
-# Once the clients have synchronised, remove the lock directory
-# This prevents clients which error out from successfully restarting unless ALL the
-# clients error out and restart, hence preventing the overall job from succeeding
-# but not actually executing N clients in parallel as expected
-rm -rf "$LOCK_DIR"
-
 # Execute fio
 fio "$CONFIG_FILE" --directory="$DATA_DIR" --output=/dev/stdout --output-format=json+
 
-# When running in write mode, clean up the directory
-if [[ "$MODE" == *write ]]; then
-    rm -rf $DATA_DIR
-fi
+# Always clean the lock directory
+rm -rf "$LOCK_DIR"
+# In write mode, remove the whole data directory
+[[ "$MODE" == *write ]] && rm -rf "$DATA_DIR"
