@@ -1,5 +1,4 @@
 import json
-import math
 
 import kopf
 import kubernetes
@@ -19,8 +18,7 @@ class Phase:
     UNKNOWN      = "Unknown"
 
 
-#: Benchmark implementation that runs fio
-fio = custom_resource.CustomResource.initialise_from_template("crds/fio.yaml")
+fio = custom_resource.CustomResource.initialise_from_template("crd/fio.yaml")
 
 
 @fio.on_create()
@@ -53,6 +51,8 @@ def on_create(namespace, name, spec, patch, **kwargs):
         kopf.adopt(pvc)
         with util.suppress_already_exists():
             corev1.create_namespaced_persistent_volume_claim(namespace, pvc)
+        # Update the volume claim name
+        patch.setdefault("spec", {}).update({ "volumeClaimName": pvc_name })
     # Create the job
     job = fio.from_template("job.yaml", name = name, pvc_name = pvc_name, spec = spec)
     kopf.adopt(job)
@@ -89,7 +89,6 @@ def on_phase_changed(namespace, name, spec, status, **kwargs):
     )
 
 
-@fio.on_update(field = "status.pvc")
 @fio.on_update(field = "status.job")
 @fio.on_update(field = "status.pods")
 def on_component_phase_changed(spec, status, patch, **kwargs):
@@ -100,14 +99,9 @@ def on_component_phase_changed(spec, status, patch, **kwargs):
     # Once the phase has transitioned to succeeded or failed, we are done
     if phase in { Phase.SUCCEEDED, Phase.FAILED }:
         return
-    managed_pvc = not spec.get("volumeClaimName")
-    pvc_phase = status.get("pvc", {}).get("phase", "Pending")
     job_phase = status.get("job", {}).get("phase", "Pending")
     pod_phases = { p["phase"] for p in status.get("pods", {}).values() }
-    if managed_pvc and pvc_phase == "Pending":
-        # If we are managing a PVC and it is pending, then the whole benchmark is pending
-        next_phase = Phase.PENDING
-    elif job_phase == util.JobPhase.PENDING:
+    if job_phase == util.JobPhase.PENDING:
         # If the job is pending, then the benchmark is pending
         next_phase = Phase.PENDING
     elif job_phase == util.JobPhase.RUNNING:
@@ -129,6 +123,16 @@ def on_component_phase_changed(spec, status, patch, **kwargs):
         patch.setdefault("status", {}).update(phase = next_phase)
 
 
+def format(value, base, units):
+    """
+    Format the value with the given base and units.
+    """
+    if len(units) > 1 and value >= base:
+        return format(value / base, base, units[1:])
+    else:
+        return f"{value:.3f} {units[0]}"
+
+
 @fio.on_update(field = "status.results")
 def on_results_changed(status, spec, patch, **kwargs):
     """
@@ -139,35 +143,17 @@ def on_results_changed(status, spec, patch, **kwargs):
     if len(results) < clients:
         return
     section = "read" if spec["mode"].endswith("read") else "write"
+    # To get an aggregate bandwidth across all clients, we sum the bandwidth for each client
+    bandwidth = sum(r["jobs"][0][section]["bw"] for r in results.values())
+    # Similar for IOPS
+    iops = sum(r["jobs"][0][section]["iops"] for r in results.values())
+    # For latency, use the mean of the mean latencies for each client
+    latency = sum(r["jobs"][0][section]["clat_ns"]["mean"] for r in results.values()) / clients
     patch.setdefault("status", {})["summary"] = {
-        # To get an aggregate bandwidth across all clients, we sum the bandwidth for each client
-        "bandwidth": sum(r["jobs"][0][section]["bw"] for r in results.values()),
-        # Similar for IOPS
-        "iops": sum(r["jobs"][0][section]["iops"] for r in results.values()),
-        # For latency, use the mean of the mean latencies for each client
-        "latency": (
-            sum(r["jobs"][0][section]["clat_ns"]["mean"] for r in results.values()) /
-            clients
-        ),
+        "bandwidth": format(bandwidth, 1024, ["KiB/s", "MiB/s", "GiB/s"]),
+        "iops": f"{iops:.3f}",
+        "latency": format(latency, 1000, ["ns", "us", "ms"]),
     }
-
-
-@fio.on_subresource_event("persistentvolumeclaim")
-@util.suppress_not_found()
-def on_pvc_event(type, namespace, labels, status, **kwargs):
-    """
-    Executes when an event occurs for a pvc that is a subresource of a fio benchmark.
-    """
-    # Just store the phase of the PVC
-    if type == "DELETED":
-        phase = "Deleted"
-    else:
-        phase = status["phase"]
-    fio.apply_patch(
-        namespace,
-        labels["app.kubernetes.io/instance"],
-        { "status": { "pvc": { "phase": phase } } }
-    )
 
 
 @fio.on_subresource_event("batch", "job")

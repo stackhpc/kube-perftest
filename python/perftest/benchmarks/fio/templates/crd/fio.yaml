@@ -116,24 +116,17 @@ spec:
                   type: object
                   properties:
                     bandwidth:
-                      type: number
+                      type: string
                     iops:
-                      type: number
+                      type: string
                     latency:
-                      type: number
+                      type: string
                 results:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
                   additionalProperties:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                pvc:
-                  type: object
-                  properties:
-                    managed:
-                      type: boolean
-                    phase:
-                      type: string
                 job:
                   type: object
                   properties:
@@ -177,11 +170,11 @@ spec:
           type: date
           jsonPath: .status.finishedAt
         - name: Bandwidth
-          type: number
+          type: string
           jsonPath: .status.summary.bandwidth
         - name: IOPS
-          type: number
+          type: string
           jsonPath: .status.summary.iops
         - name: Latency
-          type: number
+          type: string
           jsonPath: .status.summary.latency

@@ -73,13 +73,11 @@ spec:
         - name: scratch
           persistentVolumeClaim:
             claimName: {{ pvc_name }}
-      # Set up the affinity rules so that it is a preference to schedule pods on different nodes
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 1
-              podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                    {{ match_expressions(name) | indent(20) }}
-                topologyKey: "kubernetes.io/hostname"
+      # Set up spread constraints to try and spread the pods evenly across the nodes
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{ subresource_labels(name) | indent(14) }}
