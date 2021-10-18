@@ -185,7 +185,6 @@ def on_pod_event(type, namespace, name, labels, body, spec, status, **kwargs):
         phase = "Terminated"
     else:
         phase = util.pod_phase(body)
-    print(f"POD PHASE: {phase}")
     patch = { "status": { "pods": { name: { "phase": phase } } } }
     # Update with the node that the pod was scheduled on, if the info is available
     if spec.get("nodeName") and status.get("hostIP"):

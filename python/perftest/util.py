@@ -21,7 +21,7 @@ def suppress_kubernetes_api_exceptions(status, reason = None):
         # If a reason was given, check if it matches the reason from the exception
         # and re-raise it if not
         if reason:
-            if reason != json.loads(exc.body).get('reason'):
+            if reason != json.loads(exc.body).get("reason"):
                 raise
         # If we get to here, the exception is suppressed
 
@@ -61,13 +61,13 @@ def deployment_phase(deployment):
     Returns the phase for a deployment.
     """
     # Requested number of replicas
-    requested = deployment['spec']['replicas']
+    requested = deployment["spec"]["replicas"]
     # Number of available pods (ready for > minReadySeconds) matching selector
-    available = deployment['status'].get('availableReplicas') or 0
+    available = deployment["status"].get("availableReplicas") or 0
     # Number of ready pods matching selector
-    ready = deployment['status'].get('readyReplicas') or 0
+    ready = deployment["status"].get("readyReplicas") or 0
     # Number of non-terminated pods that match the current spec
-    updated = deployment['status'].get('updatedReplicas') or 0
+    updated = deployment["status"].get("updatedReplicas") or 0
     if updated < requested:
         return DeploymentPhase.UPDATING
     elif available >= 1:
@@ -92,18 +92,20 @@ def job_phase(job):
     """
     Returns the phase for a job.
     """
-    # The job is completed if it has a completion time
-    completed = bool(job['status'].get('completionTime'))
-    # The required number of completions
-    completions = job['spec']['completions']
+    # Check for either a complete or failed condition
+    conditions = job["status"].get("conditions", [])
+    completed = any(c["type"] == "Complete" and c["status"] == "True" for c in conditions)
+    failed = any(c["type"] == "Failed" and c["status"] == "True" for c in conditions)
     # The number of active pods
-    active = job['status'].get('active', 0)
-    # The number of succeeded pods
-    succeeded = job['status'].get('succeeded', 0)
+    active = job["status"].get("active", 0)
     if completed:
-        return JobPhase.SUCCEEDED if succeeded >= completions else JobPhase.FAILED
+        return JobPhase.SUCCEEDED
+    elif failed:
+        return JobPhase.FAILED
+    elif active > 0:
+        return JobPhase.RUNNING
     else:
-        return JobPhase.RUNNING if active > 0 else JobPhase.PENDING
+        return JobPhase.PENDING
 
 
 class PodPhase:

@@ -5,8 +5,15 @@ metadata:
   labels:
     {{ subresource_labels(name) | indent(4) }}
 spec:
+  # Make sure that the correct number of clients can run in parallel
+  # and expect them all to succeed to consider the job successful
   completions: {{ spec.clients }}
   parallelism: {{ spec.clients }}
+  # Any failures should result in the failure of the job
+  # This is important because a client that restarts won't be running
+  # in parallel with the others and will distort the results
+  # Combined with restartPolicy=Never in the pod spec, this should ensure that
+  backoffLimit: 0
   template:
     metadata:
       labels:
@@ -40,28 +47,6 @@ spec:
               readOnly: true
             - name: scratch
               mountPath: /scratch
-          # The container has successfully started once the data directory exists
-          # livenessProbe:
-          #   exec:
-          #     command:
-          #       - bash
-          #       - -c
-          #       - "test -f /scratch/${POD_NAME}/RUNNING"
-          # readinessProbe:
-          #   exec:
-          #     command:
-          #       - bash
-          #       - -c
-          #       - "test -f /scratch/${POD_NAME}/RUNNING"
-          # startupProbe:
-          #   exec:
-          #     command:
-          #       - bash
-          #       - -c
-          #       - "test -f /scratch/${POD_NAME}/RUNNING"
-          #   # Allow up to 10m for the pods to synchronise
-          #   periodSeconds: 1
-          #   failureThreshold: 600
           {%- if spec.resources %}
           resources:
             {{ spec.resources | toyaml | indent(12) }}
