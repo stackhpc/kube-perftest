@@ -24,12 +24,12 @@ ENV PYTHONUNBUFFERED 1
 
 # Install dependencies
 # Doing this separately by copying only the requirements file enables better use of the build cache
-# COPY ./requirements.txt /perftest/
-# RUN pip install --no-deps --requirement /perftest/requirements.txt
+COPY ./requirements.txt /perftest/
+RUN pip install --no-deps --requirement /perftest/requirements.txt
 
 # Install the perftest package
 COPY . /perftest
-RUN pip install -e /perftest
+RUN pip install --no-deps -e /perftest
 
 # By default, run the operator using kopf
 USER $APP_UID
