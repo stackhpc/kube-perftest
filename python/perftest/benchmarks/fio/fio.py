@@ -64,19 +64,14 @@ def on_create(namespace, name, spec, patch, **kwargs):
 
 
 @fio.on_update(field = "status.phase")
-def on_phase_changed(namespace, name, spec, status, **kwargs):
+def on_phase_changed(namespace, name, status, **kwargs):
     """
     Executes when the phase of a fio benchmark changes.
     """
     # We only need to handle the succeeded phase
     if status["phase"] != Phase.SUCCEEDED:
         return
-    # If the results have not been logged for each client, schedule a retry
-    clients = spec["clients"]
-    results = status.get("results", {})
-    if len(results) < clients:
-        raise kopf.TemporaryError("Results are not yet available")
-    # Once we have a result for each client, delete the subresources
+    # When the job succeeds, delete the subresources
     selector = fio.subresource_label_selector(name = name)
     corev1 = kubernetes.client.CoreV1Api()
     corev1.delete_collection_namespaced_config_map(namespace, label_selector = selector)
@@ -101,6 +96,8 @@ def on_component_phase_changed(spec, status, patch, **kwargs):
         return
     job_phase = status.get("job", {}).get("phase", "Pending")
     pod_phases = { p["phase"] for p in status.get("pods", {}).values() }
+    clients = spec["clients"]
+    result_count = len(status.get("results", {}))
     if job_phase == util.JobPhase.PENDING:
         # If the job is pending, then the benchmark is pending
         next_phase = Phase.PENDING
@@ -113,6 +110,10 @@ def on_component_phase_changed(spec, status, patch, **kwargs):
             next_phase = Phase.INITIALISING
         else:
             next_phase = Phase.RUNNING
+    elif result_count < clients:
+        # If the results have not yet been collected for all the pods, don't mark the
+        # benchmark as succeeded yet
+        next_phase = Phase.RUNNING
     elif job_phase == util.JobPhase.SUCCEEDED:
         next_phase = Phase.SUCCEEDED
     elif job_phase == util.JobPhase.FAILED:

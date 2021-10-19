@@ -56,10 +56,10 @@ done
 fio "$CONFIG_FILE" --directory="$DATA_DIR" --output=/dev/stdout --output-format=json+
 
 # Each pod removes it's own lock file
-rm "${LOCK_DIR}/${POD_NAME}"
+rm "${LOCK_DIR}/${POD_NAME}" >/dev/null 2>&1 || true
 # The last one out removes the directory
 rmdir "$LOCK_DIR" >/dev/null 2>&1 || true
 # In write mode, remove the whole data directory
 if [[ "$MODE" == *write ]]; then
-    rm -rf "$DATA_DIR"
+    rm -rf "$DATA_DIR" >/dev/null 2>&1 || true
 fi
