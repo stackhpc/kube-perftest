@@ -6,7 +6,7 @@ metadata:
     {{ subresource_labels(name, 'server') | indent(4) }}
 spec:
   ports:
-    - port: 5201
+    - port: 5001
       targetPort: iperf-server
       protocol: TCP
   selector:

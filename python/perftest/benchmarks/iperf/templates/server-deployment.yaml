@@ -25,7 +25,7 @@ spec:
             - --server
           ports:
             - name: iperf-server
-              containerPort: 5201
+              containerPort: 5001
               protocol: TCP
       # Because these jobs are very performance sensitive, prevent the pod
       # from being scheduled onto a node that already has an iperf component running
