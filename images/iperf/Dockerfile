@@ -1,9 +1,9 @@
 FROM debian:latest
 
-ARG IPERF_VERSION=3.9-1
+ARG IPERF_VERSION=2.0.14a+dfsg1-1
 RUN apt-get update && \
-    apt-get install -y "iperf3=$IPERF_VERSION" && \
+    apt-get install -y "iperf=$IPERF_VERSION" && \
     rm -rf /var/lib/apt/lists/*
 
-EXPOSE 5201
-ENTRYPOINT ["iperf3"]
+EXPOSE 5001
+ENTRYPOINT ["iperf"]
