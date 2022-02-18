@@ -28,6 +28,10 @@ spec:
                   type: string
                   enum: [IfNotPresent, Always, Never]
                   default: IfNotPresent
+                mode:
+                  type: string
+                  enum: [PodToPod, PodToService]
+                  default: PodToPod
                 hostNetwork:
                   type: boolean
                   default: false
@@ -44,7 +48,7 @@ spec:
               properties:
                 phase:
                   type: string
-                  default: New
+                  default: Pending
                 finishedAt:
                   type: string
                 result:
@@ -56,6 +60,11 @@ spec:
                   properties:
                     phase:
                       type: string
+                      default: Pending
+                    serviceIP:
+                      type: string
+                    podIP:
+                      type: string
                     nodeName:
                       type: string
                     nodeIP:
@@ -65,11 +74,17 @@ spec:
                   properties:
                     phase:
                       type: string
+                      default: Pending
+                    podIP:
+                      type: string
                     nodeName:
                       type: string
                     nodeIP:
                       type: string
       additionalPrinterColumns:
+        - name: Mode
+          type: string
+          jsonPath: .spec.mode
         - name: Host Network
           type: boolean
           jsonPath: .spec.hostNetwork
@@ -86,6 +101,10 @@ spec:
           type: string
           priority: 1
           jsonPath: .status.server.phase
+        - name: Server IP
+          type: string
+          priority: 1
+          jsonPath: .status.server.podIP
         - name: Server Node
           type: string
           priority: 1
@@ -94,6 +113,10 @@ spec:
           type: string
           priority: 1
           jsonPath: .status.client.phase
+        - name: Client IP
+          type: string
+          priority: 1
+          jsonPath: .status.client.podIP
         - name: Client Node
           type: string
           priority: 1

@@ -21,7 +21,7 @@ spec:
           imagePullPolicy: {{ spec.imagePullPolicy }}
           args:
             - --client
-            - {{ name }}-iperf-server
+            - {{ server_ip }}
             - --time
             - "{{ spec.duration }}"
             - --parallel

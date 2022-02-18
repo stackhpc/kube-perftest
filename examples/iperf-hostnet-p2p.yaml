@@ -1,0 +1,10 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: IPerf
+metadata:
+  generateName: iperf-hostnet-p2p-
+spec:
+  imagePullPolicy: Always
+  mode: PodToPod
+  hostNetwork: true
+  duration: 120
+  streams: 16
