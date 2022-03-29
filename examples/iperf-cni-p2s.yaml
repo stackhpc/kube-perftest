@@ -6,5 +6,5 @@ spec:
   imagePullPolicy: Always
   mode: PodToService
   hostNetwork: false
-  duration: 120
+  duration: 30
   streams: 16

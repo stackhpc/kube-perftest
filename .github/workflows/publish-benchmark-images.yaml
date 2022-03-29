@@ -16,27 +16,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - benchmark: fio
-          - benchmark: iperf
+          - component: fio
+          - component: iperf
+          - component: perftest
     steps:
       - name: Check out the repository
         uses: actions/checkout@v2
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-        with:
-          platforms: all
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Set up Docker layer caching
-        uses: actions/cache@v2
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ matrix.benchmark }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ matrix.benchmark }}-
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v1
@@ -49,7 +34,7 @@ jobs:
         id: image-meta
         uses: docker/metadata-action@v3
         with:
-          images: ghcr.io/stackhpc/${{ matrix.benchmark }}
+          images: ghcr.io/stackhpc/${{ matrix.component }}
           # Produce the branch name or tag and the SHA as tags
           tags: |
             type=ref,event=branch
@@ -57,21 +42,11 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push image
-        uses: docker/build-push-action@v2
+        uses: stackhpc/github-actions/docker-multiarch-build-push@master
         with:
-          context: ./images/${{ matrix.benchmark }}
+          cache-key: ${{ matrix.component }}
+          context: ./images/${{ matrix.component }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.image-meta.outputs.tags }}
           labels: ${{ steps.image-meta.outputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-      # Temp fix
-      # https://github.com/docker/build-push-action/issues/252
-      # https://github.com/moby/buildkit/issues/1896
-      # https://github.com/docker/buildx/pull/535
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
