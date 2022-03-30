@@ -1,0 +1,115 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: rdmabandwidths.perftest.stackhpc.com
+spec:
+  group: perftest.stackhpc.com
+  scope: Namespaced
+  names:
+    plural: rdmabandwidths
+    kind: RDMABandwidth
+  versions:
+    - name: v1alpha1
+      deprecated: false
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              default: {}
+              properties:
+                image:
+                  type: string
+                  default: ghcr.io/stackhpc/perftest:main
+                imagePullPolicy:
+                  type: string
+                  enum: [IfNotPresent, Always, Never]
+                  default: IfNotPresent
+                mode:
+                  type: string
+                  enum: [read, write]
+                  default: read
+                rdmaSharedDeviceName:
+                  type: string
+                  default: rdma_shared_device_a
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+              default: {}
+              properties:
+                phase:
+                  type: string
+                  default: Pending
+                finishedAt:
+                  type: string
+                result:
+                  type: string
+                output:
+                  type: string
+                server:
+                  type: object
+                  properties:
+                    phase:
+                      type: string
+                      default: Pending
+                    podIP:
+                      type: string
+                    nodeName:
+                      type: string
+                    nodeIP:
+                      type: string
+                client:
+                  type: object
+                  properties:
+                    phase:
+                      type: string
+                      default: Pending
+                    podIP:
+                      type: string
+                    nodeName:
+                      type: string
+                    nodeIP:
+                      type: string
+      additionalPrinterColumns:
+        - name: Mode
+          type: string
+          jsonPath: .spec.mode
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Server Status
+          type: string
+          priority: 1
+          jsonPath: .status.server.phase
+        - name: Server IP
+          type: string
+          priority: 1
+          jsonPath: .status.server.podIP
+        - name: Server Node
+          type: string
+          priority: 1
+          jsonPath: .status.server.nodeName
+        - name: Client Status
+          type: string
+          priority: 1
+          jsonPath: .status.client.phase
+        - name: Client IP
+          type: string
+          priority: 1
+          jsonPath: .status.client.podIP
+        - name: Client Node
+          type: string
+          priority: 1
+          jsonPath: .status.client.nodeName
+        - name: Created
+          type: date
+          jsonPath: .metadata.creationTimestamp
+        - name: Finished
+          type: date
+          jsonPath: .status.finishedAt
+        - name: Result
+          type: string
+          jsonPath: .status.result

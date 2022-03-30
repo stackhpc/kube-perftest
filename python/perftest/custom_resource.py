@@ -109,7 +109,10 @@ class CustomResource:
         
         Optionally, a specific instance and/or component can be specified.
         """
-        labels = { "app.kubernetes.io/name": self.singular_name }
+        labels = {
+            "app.kubernetes.io/managed-by": "perftest-operator",
+            "app.kubernetes.io/name": self.singular_name,
+        }
         if name:
             labels["app.kubernetes.io/instance"] = name
         if component:
