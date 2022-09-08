@@ -17,6 +17,7 @@ jobs:
         include:
           - component: fio
           - component: iperf
+          - component: mpi-benchmarks
           - component: perftest
     steps:
       - name: Check out the repository
