@@ -1,0 +1,73 @@
+---
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: {{ benchmark.metadata.name }}
+  labels:
+    {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.name_label }}: {{ benchmark.metadata.name }}
+spec:
+  maxRetry: 10
+  minAvailable: 3
+  schedulerName: {{ settings.scheduler_name }}
+  queue: {{ settings.queue_name }}
+  priorityClassName: {{ benchmark.status.priority_class_name }}
+  plugins:
+    env: []
+    mpi:
+      - --master=mpi-master
+      - --worker=mpi-worker
+      - --port=22
+    ssh: []
+    svc:
+      - --disable-network-policy
+  policies:
+    - event: PodEvicted
+      action: RestartJob
+  tasks:
+    - name: mpi-master
+      replicas: 1
+      policies:
+        # When the master terminates successfully, the job is done
+        - event: TaskCompleted
+          action: CompleteJob
+      template:
+        metadata:
+          labels:
+            {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.name_label }}: {{ benchmark.metadata.name }}
+            {{ settings.component_label }}: master
+        spec:
+          priorityClassName: {{ benchmark.status.priority_class_name }}
+          restartPolicy: OnFailure
+          containers:
+            - name: mpi-master
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              command:
+                - mpi-master
+                - --allow-run-as-root
+                - --host
+                - "$(MPI_HOST)"
+                - -np
+                - "2"
+                - mpitests-IMB-MPI1
+                - pingpong
+
+    - name: mpi-worker
+      replicas: 2
+      template:
+        metadata:
+          labels:
+            {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.name_label }}: {{ benchmark.metadata.name }}
+            {{ settings.component_label }}: worker
+        spec:
+          priorityClassName: {{ benchmark.status.priority_class_name }}
+          restartPolicy: OnFailure
+          containers:
+            - name: mpi-worker
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              command:
+                - mpi-worker
