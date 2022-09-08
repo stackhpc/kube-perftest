@@ -5,7 +5,7 @@ set -ex
 # We initialise MPI over SSH, so launch SSHD as a background process
 mkdir -p /var/run/sshd
 ssh-keygen -A
-/usr/sbin/sshd &
+/usr/sbin/sshd -p "${SSH_PORT:-22}" &
 
 # Run the actual MPI job as the foreground task
 mpirun --prefix "$OPENMPI_ROOT" "$@"
