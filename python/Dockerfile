@@ -34,4 +34,4 @@ RUN pip install --no-deps -e /perftest
 # By default, run the operator using kopf
 USER $APP_UID
 ENTRYPOINT ["tini", "-g", "--"]
-CMD ["kopf", "run", "--module", "perftest", "--all-namespaces"]
+CMD ["kopf", "run", "--module", "perftest.operator", "--all-namespaces"]

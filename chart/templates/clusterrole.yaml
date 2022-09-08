@@ -1,0 +1,80 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "kube-perftest.fullname" . }}
+  labels: {{ include "kube-perftest.labels" . | nindent 4 }}
+rules:
+  # Manipulating CRDs (only allow patching of our own CRDs)
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - list
+      - get
+      - watch
+      - create
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    resourceNames:
+      - iperfs.perftest.stackhpc.com
+    verbs:
+      - update
+      - patch
+  # Required for kopf to watch resources properly
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - list
+      - watch
+  # Required for kopf to produce events properly
+  - apiGroups:
+      - ""
+      - events.k8s.io
+    resources:
+      - events
+    verbs:
+      - create
+  # We can manipulate our own objects
+  - apiGroups:
+      - perftest.stackhpc.com
+    resources:
+      - "*"
+    verbs:
+      - "*"
+  # We need to be able to manipulate priority classes for jobs
+  - apiGroups:
+      - scheduling.k8s.io
+    resources:
+      - priorityclasses
+    verbs:
+      - "*"
+  # We need to manipulate Volcano jobs and "support resources"
+  - apiGroups:
+      - batch.volcano.sh
+    resources:
+      - jobs
+    verbs:
+      - "*"
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - secrets
+      - services
+    verbs:
+      - "*"
+  # We need to be able to watch pods and fetch their logs
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/log
+    verbs:
+      - list
+      - get
+      - watch

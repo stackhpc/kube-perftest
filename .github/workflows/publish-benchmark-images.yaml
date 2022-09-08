@@ -1,14 +1,13 @@
 name: Publish benchmark images
-# Run the tasks on every push that changes the images and tags
 on:
   push:
-    # Note that the paths filter is not evaluated for tags, so this should run for
-    # every push to a branch that changes the images and every tag
     branches: ['**']
     tags: ['**']
     paths:
-      - .github/workflows/publish-benchmark-images.yaml
-      - 'images/**'
+      - .github/**
+      - chart/**
+      - images/**
+      - python/**
 jobs:
   build_push_images:
     name: Build and push benchmark images
@@ -34,7 +33,7 @@ jobs:
         id: image-meta
         uses: docker/metadata-action@v3
         with:
-          images: ghcr.io/stackhpc/${{ matrix.component }}
+          images: ghcr.io/stackhpc/kube-perftest-${{ matrix.component }}
           # Produce the branch name or tag and the SHA as tags
           tags: |
             type=ref,event=branch
