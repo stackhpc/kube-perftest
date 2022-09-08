@@ -17,7 +17,9 @@ RUN yum install -y "mpitests-openmpi-${MPITESTS_VERSION}" && \
     rm -rf /var/cache
 
 # Make sure the MPI binaries are on the PATH
-ENV PATH=/usr/lib64/openmpi/bin:$PATH
+ENV OPENMPI_ROOT=/usr/lib64/openmpi
+ENV PATH=$OPENMPI_ROOT/bin:$PATH
+ENV LD_LIBRARY_PATH=$OPENMPI_ROOT/lib:$LD_LIBRARY_PATH
 
 # Install helper scripts
 COPY ./scripts/* /usr/local/bin
