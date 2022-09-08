@@ -1,0 +1,79 @@
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: openfoam
+spec:
+  queue: default
+  maxRetry: 10
+  minAvailable: 3
+  schedulerName: volcano
+  plugins:
+    env: []
+    mpi:
+      - --master=mpi-master
+      - --worker=mpi-worker
+      - --port=22
+    ssh: []
+    svc:
+     - --disable-network-policy
+  policies:
+    - event: PodEvicted
+      action: RestartJob
+  tasks:
+    - name: mpi-master
+      replicas: 1
+      policies:
+        - event: TaskCompleted
+          action: CompleteJob
+      template:
+        spec:
+          containers:
+            - command:
+                - /bin/sh
+                - -c
+                - |
+                  git clone https://develop.openfoam.com/committees/hpc.git /opt/hpc 
+                  ln -s /opt/hpc/Lid_driven_cavity-3d/S /opt/benchmark
+                  mv /opt/benchmark/system/fvSolution.fixedNORM /opt/benchmark/system/fvSolution
+                  mv /opt/benchmark/constant/transportProperties /opt/benchmark/constant/physicalProperties
+                  sed -i "s/^numberOfSubdomains.*/numberOfSubdomains 2;/g" /opt/benchmark/system/decomposeParDict
+                  cd /opt/benchmark
+                  blockMesh
+                  decomposePar -force
+                  mkdir -p /var/run/sshd
+                  /usr/bin/ssh-keygen -A
+                  /usr/sbin/sshd &
+                  echo "${MPI_HOST}" | tr ',' '\n' > /opt/benchmark/mpihosts
+                  mpirun --allow-run-as-root --hostfile /opt/benchmark/mpihosts -np 2 icoFoam -parallel
+              image: ghcr.io/stackhpc/kube-perftest-openfoam:feature-openfoam
+              name: mpi-master
+              resources:
+                  requests:
+                    cpu: "1"
+          restartPolicy: OnFailure
+    - name: mpi-worker
+      replicas: 2
+      template:
+        spec:
+          containers:
+            - name: mpi-worker
+              command:
+              - /bin/sh
+              - -c
+              - |
+                git clone https://develop.openfoam.com/committees/hpc.git /opt/hpc 
+                ln -s /opt/hpc/Lid_driven_cavity-3d/S /opt/benchmark
+                mv /opt/benchmark/system/fvSolution.fixedNORM /opt/benchmark/system/fvSolution
+                mv /opt/benchmark/constant/transportProperties /opt/benchmark/constant/physicalProperties
+                sed -i "s/^numberOfSubdomains.*/numberOfSubdomains 2;/g" /opt/benchmark/system/decomposeParDict
+                cd /opt/benchmark
+                blockMesh
+                decomposePar -force
+                mkdir -p /var/run/sshd
+                /usr/bin/ssh-keygen -A
+                /usr/sbin/sshd -D -p "${SSH_PORT:-22}"
+              image: ghcr.io/stackhpc/kube-perftest-openfoam:feature-openfoam
+              resources:
+                  requests:
+                    cpu: "1"
+          restartPolicy: OnFailure
