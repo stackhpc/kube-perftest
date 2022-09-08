@@ -18,6 +18,7 @@ jobs:
           - component: fio
           - component: iperf
           - component: mpi-benchmarks
+          - component: openfoam
           - component: perftest
     steps:
       - name: Check out the repository
