@@ -8,4 +8,4 @@ ssh-keygen -A
 /usr/sbin/sshd &
 
 # Run the actual MPI job as the foreground task
-mpirun --prefix "$MPI_ROOT" "$@"
+mpirun --prefix "$OPENMPI_ROOT" "$@"
