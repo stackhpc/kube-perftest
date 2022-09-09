@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -x
+set -ex
 
 PROBLEM_SIZE=$1
 ITERATIVE_METHOD=$2
@@ -20,16 +20,11 @@ cd /opt/benchmark
 blockMesh
 decomposePar -force
 
-# Start SSHD
-mkdir -p /var/run/sshd
-/usr/bin/ssh-keygen -A
-/usr/sbin/sshd -p "${SSH_PORT:-22}" &
-
-for host in $( echo "$MPI_HOST" | tr ',' ' '); do
+for host in $( echo "$VC_MPI_WORKER_HOSTS" | tr ',' ' '); do
   while ! rsync -avL /opt/benchmark ${host}:/opt/ ; do
     echo "Failed to connect to $host, waiting before retry..."
     sleep 5
   done  
 done
 
-/usr/bin/time -p mpirun --allow-run-as-root --hostfile /etc/volcano/mpi_worker.host -np ${N_PROC} icoFoam -parallel
+exec /usr/bin/time -p mpirun --allow-run-as-root --hostfile /etc/volcano/mpi_worker.host -np ${N_PROC} icoFoam -parallel
