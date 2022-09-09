@@ -19,7 +19,10 @@ rules:
     resources:
       - customresourcedefinitions
     resourceNames:
+      - benchmarksets.perftest.stackhpc.com
       - iperfs.perftest.stackhpc.com
+      - mpipingpongs.perftest.stackhpc.com
+      - openfoams.perftest.stackhpc.com
     verbs:
       - update
       - patch
