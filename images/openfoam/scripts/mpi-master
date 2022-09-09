@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -x
+
+PROBLEM_SIZE=$1
+ITERATIVE_METHOD=$2
+N_PROC=$3
+
+# Set openfoam environment
+source /root/.bashrc
+
+# Prepare benchmark
+ln -sf /opt/hpc/Lid_driven_cavity-3d/${PROBLEM_SIZE} /opt/benchmark
+ln -sf /opt/benchmark/system/fvSolution.${ITERATIVE_METHOD} /opt/benchmark/system/fvSolution
+mv /opt/benchmark/constant/transportProperties /opt/benchmark/constant/physicalProperties
+sed -i "s/^numberOfSubdomains.*/numberOfSubdomains ${N_PROC};/g" /opt/benchmark/system/decomposeParDict
+
+# Stage benchmark datafiles
+cd /opt/benchmark
+blockMesh
+decomposePar -force
+
+# Start SSHD
+mkdir -p /var/run/sshd
+/usr/bin/ssh-keygen -A
+/usr/sbin/sshd &
+
+for host in $( echo "$MPI_HOST" | tr ',' ' '); do
+  while ! rsync -avL /opt/benchmark ${host}:/opt/ ; do
+    echo "Failed to connect to $host, waiting before retry..."
+    sleep 5
+  done  
+done
+
+time mpirun --allow-run-as-root --hostfile /etc/volcano/mpi_worker.host -np ${N_PROC} icoFoam -parallel

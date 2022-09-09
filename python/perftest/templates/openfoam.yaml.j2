@@ -43,9 +43,8 @@ spec:
                   mkdir -p /var/run/sshd
                   /usr/bin/ssh-keygen -A
                   /usr/sbin/sshd &
-                  echo "${MPI_HOST}" | tr ',' '\n' > /opt/benchmark/mpihosts
-                  mpirun --allow-run-as-root --hostfile /opt/benchmark/mpihosts -np 2 icoFoam -parallel
-              image: ghcr.io/stackhpc/kube-perftest-openfoam:feature-openfoam
+                  time mpirun --allow-run-as-root --hosts $(MPI_HOST) -np 2 icoFoam -parallel
+              image: ghcr.io/stackhpc/kube-perftest-openfoam:7fe7ed7
               name: mpi-master
               resources:
                   requests:
@@ -72,7 +71,7 @@ spec:
                 mkdir -p /var/run/sshd
                 /usr/bin/ssh-keygen -A
                 /usr/sbin/sshd -D -p "${SSH_PORT:-22}"
-              image: ghcr.io/stackhpc/kube-perftest-openfoam:feature-openfoam
+              image: ghcr.io/stackhpc/kube-perftest-openfoam:7fe7ed7
               resources:
                   requests:
                     cpu: "1"
