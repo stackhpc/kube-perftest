@@ -182,9 +182,6 @@ spec:
                   topologyKey: "kubernetes.io/hostname"
                 # Avoid other workers from our own job
                 - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.component_label }}
-                        operator: In
-                        values:
-                          - worker
+                    matchLabels:
+                      {{ settings.component_label }}: worker
                   topologyKey: "kubernetes.io/hostname"

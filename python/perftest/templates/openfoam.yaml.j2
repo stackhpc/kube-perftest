@@ -178,11 +178,8 @@ spec:
                 {%- if benchmark.spec.host_network %}
                 # Avoid other workers from our own job if running with host networking
                 - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.component_label }}
-                        operator: In
-                        values:
-                          - worker
+                    matchLabels:
+                      {{ settings.component_label }}: worker
                   topologyKey: "kubernetes.io/hostname"
                 {%- endif %}
           {%- if not benchmark.spec.host_network %}
@@ -190,23 +187,11 @@ spec:
           topologySpreadConstraints:
             - maxSkew: 1
               topologyKey: "kubernetes.io/hostname"
-              whenUnsatisfiable: DoNotSchedule
+              whenUnsatisfiable: ScheduleAnyway
               labelSelector:
-                matchExpressions:
-                  - key: {{ settings.kind_label }}
-                    operator: In
-                    values:
-                      - {{ benchmark.kind }}
-                  - key: {{ settings.namespace_label }}
-                    operator: In
-                    values:
-                      - {{ benchmark.metadata.namespace }}
-                  - key: {{ settings.name_label }}
-                    operator: In
-                    values:
-                      - {{ benchmark.metadata.name }}
-                  - key: {{ settings.component_label }}
-                    operator: In
-                    values:
-                      - worker
+                matchLabels:
+                  {{ settings.kind_label }}: {{ benchmark.kind }}
+                  {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+                  {{ settings.name_label }}: {{ benchmark.metadata.name }}
+                  {{ settings.component_label }}: worker
           {%- endif %}
