@@ -23,7 +23,7 @@ decomposePar -force
 # Start SSHD
 mkdir -p /var/run/sshd
 /usr/bin/ssh-keygen -A
-/usr/sbin/sshd &
+exec /usr/sbin/sshd -p "${SSH_PORT:-22}" &
 
 for host in $( echo "$MPI_HOST" | tr ',' ' '); do
   while ! rsync -avL /opt/benchmark ${host}:/opt/ ; do

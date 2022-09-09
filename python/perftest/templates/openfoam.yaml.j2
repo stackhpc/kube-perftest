@@ -1,18 +1,36 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ benchmark.metadata.name }}-ssh-config
+  labels:
+    {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+    {{ settings.name_label }}: {{ benchmark.metadata.name }}
+data:
+  01-default-port.conf: |
+    Port {{ benchmark.spec.ssh_port }}
+---
 apiVersion: batch.volcano.sh/v1alpha1
 kind: Job
 metadata:
-  name: openfoam
+  name: {{ benchmark.metadata.name }}
+  labels:
+    {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+    {{ settings.name_label }}: {{ benchmark.metadata.name }}
 spec:
-  queue: default
   maxRetry: 10
   minAvailable: 3
-  schedulerName: volcano
+  queue: {{ settings.queue_name }}
+  schedulerName: {{ settings.scheduler_name }}
+  priorityClassName: {{ benchmark.status.priority_class_name }}
   plugins:
     env: []
     mpi:
       - --master=mpi-master
       - --worker=mpi-worker
-      - --port=22
+      - --port={{ benchmark.spec.ssh_port }}
     ssh: []
     svc:
      - --disable-network-policy
@@ -26,53 +44,80 @@ spec:
         - event: TaskCompleted
           action: CompleteJob
       template:
+        metadata:
+          labels:
+            {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+            {{ settings.name_label }}: {{ benchmark.metadata.name }}
+            {{ settings.component_label }}: master
         spec:
-          containers:
-            - command:
-                - /bin/sh
-                - -c
-                - |
-                  git clone https://develop.openfoam.com/committees/hpc.git /opt/hpc 
-                  ln -s /opt/hpc/Lid_driven_cavity-3d/S /opt/benchmark
-                  mv /opt/benchmark/system/fvSolution.fixedNORM /opt/benchmark/system/fvSolution
-                  mv /opt/benchmark/constant/transportProperties /opt/benchmark/constant/physicalProperties
-                  sed -i "s/^numberOfSubdomains.*/numberOfSubdomains 2;/g" /opt/benchmark/system/decomposeParDict
-                  cd /opt/benchmark
-                  blockMesh
-                  decomposePar -force
-                  mkdir -p /var/run/sshd
-                  /usr/bin/ssh-keygen -A
-                  /usr/sbin/sshd &
-                  time mpirun --allow-run-as-root --hosts $(MPI_HOST) -np 2 icoFoam -parallel
-              image: ghcr.io/stackhpc/kube-perftest-openfoam:7fe7ed7
-              name: mpi-master
-              resources:
-                  requests:
-                    cpu: "1"
+          priorityClassName: {{ benchmark.status.priority_class_name }}
+          {%- if benchmark.spec.host_network %}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          {%- endif %}
           restartPolicy: OnFailure
+          containers:
+            - name: mpi-master
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              env:
+                - name: SSH_PORT
+                  value: "{{ benchmark.spec.ssh_port }}"
+              command:
+                - /usr/local/bin/mpi-master
+                - {{ benchmark.spec.problem_size }} # S, M, L
+                - {{ benchmark.spec.iterative_method }} # fixedNORM etc
+                - {{ benchmark.spec.n_proc }}
+              volumeMounts:
+                - name: ssh-config
+                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
+                  subPath: 01-default-port.conf
+                  readOnly: true         
+          volumes:
+            - name: ssh-config
+              configMap:
+                name: {{ benchmark.metadata.name }}-ssh-config
+
     - name: mpi-worker
-      replicas: 2
+      replicas: {{ benchmark.spec.n_workers }}
       template:
+        metadata:
+          labels:
+            {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+            {{ settings.name_label }}: {{ benchmark.metadata.name }}
+            {{ settings.component_label }}: worker
         spec:
+          priorityClassName: {{ benchmark.status.priority_class_name }}
+          {%- if benchmark.spec.host_network %}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          {%- endif %}
+          restartPolicy: OnFailure
           containers:
             - name: mpi-worker
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              env:
+                - name: SSH_PORT
+                  value: "{{ benchmark.spec.ssh_port }}"
               command:
-              - /bin/sh
-              - -c
-              - |
-                git clone https://develop.openfoam.com/committees/hpc.git /opt/hpc 
-                ln -s /opt/hpc/Lid_driven_cavity-3d/S /opt/benchmark
-                mv /opt/benchmark/system/fvSolution.fixedNORM /opt/benchmark/system/fvSolution
-                mv /opt/benchmark/constant/transportProperties /opt/benchmark/constant/physicalProperties
-                sed -i "s/^numberOfSubdomains.*/numberOfSubdomains 2;/g" /opt/benchmark/system/decomposeParDict
-                cd /opt/benchmark
-                blockMesh
-                decomposePar -force
-                mkdir -p /var/run/sshd
-                /usr/bin/ssh-keygen -A
-                /usr/sbin/sshd -D -p "${SSH_PORT:-22}"
-              image: ghcr.io/stackhpc/kube-perftest-openfoam:7fe7ed7
-              resources:
-                  requests:
-                    cpu: "1"
-          restartPolicy: OnFailure
+                - /usr/local/bin/mpi-worker
+              volumeMounts:
+                - name: ssh-config
+                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
+                  subPath: 01-default-port.conf
+                  readOnly: true
+          volumes:
+            - name: ssh-config
+              configMap:
+                name: {{ benchmark.metadata.name }}-ssh-config
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.kind_label }}
+                        operator: Exists
+                  topologyKey: "kubernetes.io/hostname"
