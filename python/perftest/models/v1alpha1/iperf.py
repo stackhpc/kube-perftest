@@ -165,25 +165,30 @@ class IPerf(
             lines = it.dropwhile(lambda l: re.match(r"^\[ *ID\]", l) is None, pod_log.splitlines())
             # Drop the header line
             _ = next(lines)
-            # Collect stream results until we hit the header line, at which point we collect the sum result
+            # Collect stream results until the end of the log
             stream_results = {}
             for line in lines:
                 match = re.search(r"^\[ *([a-zA-Z0-9]+)\].*?(\d+) KBytes +(\d+) Kbits/sec", line)
                 if match is not None:
-                    result = IPerfSingleResult(transfer = match.group(2), bandwidth = match.group(3))
+                    stream_results[match.group(1)] = IPerfSingleResult(
+                        transfer = match.group(2),
+                        bandwidth = match.group(3)
+                    )
                 else:
-                    raise PodLogFormatError("pod log is not of the expected format", pod_log)
-                if match.group(1) == "SUM":
-                    sum_result = result
-                    break
-                else:
-                    stream_results[match.group(1)] = result
-            else:
+                    continue
+            # Extract the sum result if it is present (single stream runs don't have one)
+            sum_result = stream_results.pop("SUM", None)
+            # Ensure that the result has the correct number of streams
+            if (
+                len(stream_results) != self.spec.streams or
+                (self.spec.streams > 1 and not sum_result)
+            ):
                 raise PodLogFormatError("pod log is not of the expected format", pod_log)
             # There should only ever be one completed pod for iperf, so we just override the result
             self.status.result = IPerfResult(
                 streams = stream_results,
-                sum = sum_result
+                # If there is no explicit sum result, use the result from the single stream
+                sum = sum_result or next(iter(stream_results.values()))
             )
 
     def summarise(self):

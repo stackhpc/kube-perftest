@@ -1,7 +1,0 @@
-apiVersion: perftest.stackhpc.com/v1alpha1
-kind: MPIPingPong
-metadata:
-  name: mpi-pingpong-hostnet
-spec:
-  imagePullPolicy: Always
-  hostNetwork: true

@@ -1,7 +1,9 @@
 import asyncio
 import datetime
 import functools
+import itertools
 import logging
+import math
 import sys
 
 import kopf
@@ -12,7 +14,7 @@ from easykube import AsyncClient, Configuration, ApiError, PRESENT
 
 from kube_custom_resource import CustomResourceRegistry
 
-from . import errors, models, template
+from . import errors, models, template, utils
 from .models import v1alpha1 as api
 from .config import settings
 
@@ -107,6 +109,9 @@ def benchmark_handler(register_fn, **kwargs):
         for crd in REGISTRY:
             preferred_version = next(k for k, v in crd.versions.items() if v.storage)
             api_version = f"{crd.api_group}/{preferred_version}"
+            # Ignore the benchmarkset
+            if crd.kind == api.BenchmarkSet._meta.kind:
+                continue
             handler = register_fn(api_version, crd.kind, **kwargs)(handler)
         return handler
     return decorator
@@ -233,6 +238,35 @@ async def handle_benchmark_status_changed(benchmark, **kwargs):
         if not benchmark.status.finished_at:
             benchmark.status.finished_at = datetime.datetime.now()
             _ = await save_benchmark_status(benchmark)
+        # If the benchmark has an owning set, register the completion with it
+        ref = next(
+            (
+                ref
+                for ref in benchmark.metadata.owner_references
+                if (
+                    ref.api_version.startswith(settings.api_group) and
+                    ref.kind == api.BenchmarkSet._meta.kind
+                )
+            ),
+            None
+        )
+        if ref:
+            ekapi = EK_CLIENT.api(ref.api_version)
+            resource = await ekapi.resource(ref.kind)
+            try:
+                benchmark_set = api.BenchmarkSet.parse_obj(
+                    await resource.fetch(
+                        ref.name,
+                        namespace = benchmark.metadata.namespace
+                    )
+                )
+            except ApiError as exc:
+                if exc.status_code != 404:
+                    raise
+            else:
+                succeeded = benchmark.status.phase == api.BenchmarkPhase.COMPLETED
+                benchmark_set.status.completed[benchmark.metadata.name] = succeeded
+                _ = await save_benchmark_status(benchmark_set)
         return
     # The only other phase we want to act on is summarising
     if benchmark.status.phase != api.BenchmarkPhase.SUMMARISING:
@@ -294,7 +328,7 @@ def on_benchmark_resource_event(*args, **kwargs):
                     benchmark = REGISTRY.get_model_instance(
                         await resource.fetch(
                             handler_kwargs["labels"][settings.name_label],
-                            namespace = handler_kwargs["namespace"]
+                            namespace = handler_kwargs["labels"][settings.namespace_label]
                         )
                     )
                 except ApiError as exc:
@@ -343,3 +377,73 @@ async def handle_pod_event(type, benchmark, body, name, namespace, status, **kwa
         return await resource.fetch(name, namespace = namespace)
     await benchmark.pod_modified(body, fetch_pod_log)
     _ = await save_benchmark_status(benchmark)
+
+
+@kopf.on.create(settings.api_group, api.BenchmarkSet._meta.kind)
+async def handle_benchmark_set_created(body, **kwargs):
+    """
+    Executed whenever a benchmark set is created.
+    """
+    benchmark_set = api.BenchmarkSet.parse_obj(body)
+    # Update the count before we create anything
+    # We can calculate this without producing any permutations
+    benchmark_set.status.count = math.prod(
+        len(vs)
+        for vs in benchmark_set.spec.permutations.values()
+    )
+    if benchmark_set.status.succeeded is None:
+        benchmark_set.status.succeeded = 0
+        benchmark_set.status.failed = 0
+    await save_benchmark_status(benchmark_set)
+    # Calculate the width that we want to pad indexes to
+    # We do this so that benchmarks are ordered by default
+    padding_width = math.floor(math.log(benchmark_set.status.count, 10)) + 1
+    # Produce the resources for the benchmark set
+    permutations = (
+        dict(permutation)
+        for permutation in itertools.product(*(
+            [(k, v) for v in vs]
+            for k, vs in benchmark_set.spec.permutations.items()
+        ))
+    )
+    for idx, permutation in enumerate(permutations):
+        resource = {
+            "apiVersion": benchmark_set.spec.template.api_version,
+            "kind": benchmark_set.spec.template.kind,
+            "metadata": {
+                # Use a name that is unique to the permutation
+                "name": f"{benchmark_set.metadata.name}-{str(idx + 1).zfill(padding_width)}",
+                "namespace": benchmark_set.metadata.namespace,
+                "ownerReferences": [
+                    {
+                        "apiVersion": benchmark_set.api_version,
+                        "kind": benchmark_set.kind,
+                        "name": benchmark_set.metadata.name,
+                        "uid": benchmark_set.metadata.uid,
+                        "blockOwnerDeletion": True,
+                        "controller": True,
+                    },
+                ]
+            },
+            "spec": utils.mergeconcat(benchmark_set.spec.template.spec, permutation)
+        }
+        _ = await EK_CLIENT.apply_object(resource)
+
+
+@kopf.on.update(settings.api_group, api.BenchmarkSet._meta.kind, field = "status.completed")
+async def handle_benchmark_set_completed(body, **kwargs):
+    """
+    Executed whenever a completed benchmark is registered for a benchmark set.
+    """
+    benchmark_set = api.BenchmarkSet.parse_obj(body)
+    succeeded = failed = 0
+    for completed in benchmark_set.status.completed.values():
+        if completed:
+            succeeded = succeeded + 1
+        else:
+            failed = failed + 1
+    benchmark_set.status.succeeded = succeeded
+    benchmark_set.status.failed = failed
+    if (succeeded + failed) == benchmark_set.status.count:
+        benchmark_set.status.finished_at = datetime.datetime.now()
+    _ = await save_benchmark_status(benchmark_set)
