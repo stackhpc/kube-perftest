@@ -32,4 +32,4 @@ for host in $( echo "$MPI_HOST" | tr ',' ' '); do
   done  
 done
 
-time mpirun --allow-run-as-root --hostfile /etc/volcano/mpi_worker.host -np ${N_PROC} icoFoam -parallel
+/usr/bin/time -p mpirun --allow-run-as-root --hostfile /etc/volcano/mpi_worker.host -np ${N_PROC} icoFoam -parallel
