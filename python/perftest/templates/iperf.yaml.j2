@@ -1,0 +1,150 @@
+{%- if benchmark.spec.server_service %}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ benchmark.metadata.name }}-server
+  labels:
+    {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+    {{ settings.name_label }}: {{ benchmark.metadata.name }}
+spec:
+  ports:
+    - port: 5001
+      targetPort: iperf-server
+      protocol: TCP
+  selector:
+    {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+    {{ settings.name_label }}: {{ benchmark.metadata.name }}
+    {{ settings.component_label }}: server
+{%- endif %}
+---
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: {{ benchmark.metadata.name }}
+  labels:
+    {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+    {{ settings.name_label }}: {{ benchmark.metadata.name }}
+spec:
+  maxRetry: 10
+  minAvailable: 2
+  schedulerName: {{ settings.scheduler_name }}
+  queue: {{ settings.queue_name }}
+  priorityClassName: {{ benchmark.status.priority_class_name }}
+  plugins:
+    env: []
+    ssh: []
+    svc: ["--disable-network-policy"]
+  policies:
+    - event: PodEvicted
+      action: RestartJob
+  tasks:
+    - replicas: 1
+      name: iperf-server
+      template:
+        metadata:
+          labels:
+            {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+            {{ settings.name_label }}: {{ benchmark.metadata.name }}
+            {{ settings.component_label }}: server
+        spec:
+          priorityClassName: {{ benchmark.status.priority_class_name }}
+          {%- if benchmark.spec.host_network %}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          {%- endif %}
+          containers:
+            - name: iperf-server
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              args:
+                - --server
+                - --len
+                - "{{ benchmark.spec.buffer_size }}"
+              ports:
+                - name: iperf-server
+                  containerPort: 5001
+                  protocol: TCP
+          # Because we generally want to test raw network performance, prevent the pod
+          # from running on a node that already has another benchmark component running,
+          # for any benchmark
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.kind_label }}
+                        operator: Exists
+                  topologyKey: "kubernetes.io/hostname"
+
+    - replicas: 1
+      name: iperf-client
+      policies:
+        # When the client terminates successfully, the job is done
+        - event: TaskCompleted
+          action: CompleteJob
+      template:
+        metadata:
+          labels:
+            {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+            {{ settings.name_label }}: {{ benchmark.metadata.name }}
+            {{ settings.component_label }}: client
+        spec:
+          priorityClassName: {{ benchmark.status.priority_class_name }}
+          {%- if benchmark.spec.host_network %}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          {%- endif %}
+          restartPolicy: OnFailure
+          # Use an init container to wait for the server to become available
+          initContainers:
+            - name: iper-client-init
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              command:
+                - bash
+                - -c
+                - |
+                    {%- if benchmark.spec.server_service %}
+                    IPERF_SERVER="{{ benchmark.metadata.name }}-server"
+                    {%- else %}
+                    IPERF_SERVER="${VC_IPERF_SERVER_HOSTS}"
+                    {%- endif %}
+                    until nc -z "${IPERF_SERVER}" 5001; do
+                        echo "Waiting for server to become available..."
+                    done
+          containers:
+            - name: iperf-client
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              args:
+                - --client
+                {%- if benchmark.spec.server_service %}
+                - "{{ benchmark.metadata.name }}-server"
+                {%- else %}
+                - "$(VC_IPERF_SERVER_HOSTS)"
+                {%- endif %}
+                - --time
+                - "{{ benchmark.spec.duration }}"
+                - --parallel
+                - "{{ benchmark.spec.streams }}"
+                - --format
+                - k
+                - --len
+                - "{{ benchmark.spec.buffer_size }}"
+          # Because we generally want to test raw network performance, prevent the pod
+          # from running on a node that already has another benchmark component running,
+          # for any benchmark
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.kind_label }}
+                        operator: Exists
+                  topologyKey: "kubernetes.io/hostname"

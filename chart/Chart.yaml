@@ -1,5 +1,5 @@
 apiVersion: v2
-name: perftest-operator
+name: kube-perftest-operator
 description: Helm chart for deploying the perftest operator.
 type: application
 # The version and appVersion are set by the CI script

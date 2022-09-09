@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kube-perftest.fullname" . }}
+  labels: {{ include "kube-perftest.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    !include "/etc/kube-perftest/defaults.yaml,/etc/kube-perftest/user-config.yaml"
+  defaults.yaml: |
+    easykubeFieldManager: {{ include "kube-perftest.fullname" . }}
+    defaultImageTag: {{ .Chart.AppVersion }}
+  user-config.yaml: |
+    {{- toYaml .Values.config | nindent 4 }}

@@ -1,0 +1,12 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: BenchmarkSet
+metadata:
+  name: mpi-pingpong
+spec:
+  template:
+    apiVersion: perftest.stackhpc.com/v1alpha1
+    kind: MPIPingPong
+    spec:
+      imagePullPolicy: Always
+  permutations:
+    hostNetwork: [true, false]
