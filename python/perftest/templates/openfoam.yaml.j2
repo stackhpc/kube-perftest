@@ -81,6 +81,8 @@ spec:
                 - labelSelector:
                     matchExpressions:
                       - key: {{ settings.kind_label }}
+                        operator: Exists
+                      - key: {{ settings.kind_label }}
                         operator: NotIn
                         values:
                           - {{ benchmark.kind }}
@@ -88,12 +90,16 @@ spec:
                 - labelSelector:
                     matchExpressions:
                       - key: {{ settings.namespace_label }}
+                        operator: Exists
+                      - key: {{ settings.namespace_label }}
                         operator: NotIn
                         values:
                           - {{ benchmark.metadata.namespace }}
                   topologyKey: "kubernetes.io/hostname"
                 - labelSelector:
                     matchExpressions:
+                      - key: {{ settings.name_label }}
+                        operator: Exists
                       - key: {{ settings.name_label }}
                         operator: NotIn
                         values:
@@ -145,6 +151,8 @@ spec:
                 - labelSelector:
                     matchExpressions:
                       - key: {{ settings.kind_label }}
+                        operator: Exists
+                      - key: {{ settings.kind_label }}
                         operator: NotIn
                         values:
                           - {{ benchmark.kind }}
@@ -152,12 +160,16 @@ spec:
                 - labelSelector:
                     matchExpressions:
                       - key: {{ settings.namespace_label }}
+                        operator: Exists
+                      - key: {{ settings.namespace_label }}
                         operator: NotIn
                         values:
                           - {{ benchmark.metadata.namespace }}
                   topologyKey: "kubernetes.io/hostname"
                 - labelSelector:
                     matchExpressions:
+                      - key: {{ settings.name_label }}
+                        operator: Exists
                       - key: {{ settings.name_label }}
                         operator: NotIn
                         values:
