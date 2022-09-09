@@ -66,9 +66,8 @@ class Configuration(BaseConfiguration):
     component_label: constr(min_length = 1) = None
 
     #: The default priority when there are no existing priority classes
-    #: By default this is one lower than the maximum user priority
-    #: The maximum priority is used for the controller pod
-    initial_priority: int = 999999999
+    #: By default, we use negative priorities so that jobs will not preempt other pods
+    initial_priority: int = -1
     #: The prefix to use for priority class names
     priority_class_prefix: constr(min_length = 1) = "kube-perftest-"
 

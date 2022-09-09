@@ -18,7 +18,6 @@ spec:
         perftest.stackhpc.com/config-hash: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "kube-perftest.fullname" . }}
-      priorityClassName: {{ include "kube-perftest.fullname" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{ toYaml . | nindent 8 }}
       {{- end }}
