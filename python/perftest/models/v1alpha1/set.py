@@ -1,4 +1,6 @@
 import datetime
+import itertools
+import math
 import typing as t
 
 from pydantic import Field, constr
@@ -26,6 +28,47 @@ class BenchmarkSetTemplate(schema.BaseModel):
     )
 
 
+class BenchmarkSetPermutations(schema.BaseModel):
+    """
+    Defines the permutations to use for the benchmarks in the set.
+    """
+    product: schema.Dict[str, t.List[schema.Any]] = Field(
+        default_factory = dict,
+        description = (
+            "Permutations are generated using the cross-product of the given keys/values."
+        )
+    )
+    explicit: t.List[schema.Dict[str, t.Any]] = Field(
+        default_factory = list,
+        description = "A list of explicit permutations to use."
+    )
+
+    def get_count(self) -> int:
+        """
+        Returns the number of permutations for the benchmark set.
+        """
+        product_count = (
+            math.prod(len(vs) for vs in self.product.values())
+            if self.product
+            else 0
+        )
+        return product_count + len(self.explicit)
+
+    def get_permutations(self) -> t.Iterable[t.Dict[str, t.Any]]:
+        """
+        Returns all the permutations for the benchmark set.
+        """
+        if self.product:
+            yield from (
+                dict(permutation)
+                for permutation in itertools.product(*(
+                    [(k, v) for v in vs]
+                    for k, vs in self.product.items()
+                ))
+            )
+        yield from self.explicit
+
+
 class BenchmarkSetSpec(schema.BaseModel):
     """
     Defines the parameters for a benchmark set.
@@ -34,12 +77,9 @@ class BenchmarkSetSpec(schema.BaseModel):
         ...,
         description = "The template to use for the benchmarks."
     )
-    permutations: schema.Dict[str, t.List[schema.Any]] = Field(
+    permutations: BenchmarkSetPermutations = Field(
         default_factory = dict,
-        description = (
-            "The permutations to use for the benchmarks. "
-            "The given keys and values will be used in a cross-product."
-        )
+        description = "The permutations to use for the benchmarks."
     )
 
 

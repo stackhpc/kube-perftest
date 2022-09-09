@@ -10,6 +10,7 @@ spec:
       imagePullPolicy: Always
       duration: 30
   permutations:
-    hostNetwork: [true, false]
-    serverService: [true, false]
-    streams: [1, 2, 4, 8, 16]
+    product:
+      hostNetwork: [true, false]
+      serverService: [true, false]
+      streams: [1, 2, 4, 8, 16, 32, 64]

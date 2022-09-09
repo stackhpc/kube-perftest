@@ -9,4 +9,6 @@ spec:
     spec:
       imagePullPolicy: Always
   permutations:
-    hostNetwork: [true, false]
+    explicit:
+      - hostNetwork: true
+      - hostNetwork: false
