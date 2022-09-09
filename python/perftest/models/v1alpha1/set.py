@@ -87,7 +87,7 @@ class BenchmarkSet(
             "jsonPath": ".status.succeeded",
         },
         {
-            "name": "Count",
+            "name": "Failed",
             "type": "string",
             "jsonPath": ".status.failed",
         },
