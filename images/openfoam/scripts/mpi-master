@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -ex
+set -x
 
 PROBLEM_SIZE=$1
 ITERATIVE_METHOD=$2
