@@ -18,6 +18,7 @@ jobs:
           - component: fio
           - component: iperf
           - component: mpi-benchmarks
+          - component: openfoam
           - component: perftest
     steps:
       - name: Check out the repository
@@ -46,7 +47,7 @@ jobs:
         with:
           cache-key: ${{ matrix.component }}
           context: ./images/${{ matrix.component }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.image-meta.outputs.tags }}
           labels: ${{ steps.image-meta.outputs.labels }}

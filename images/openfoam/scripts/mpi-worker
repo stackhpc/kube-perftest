@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -ex
+
+# We initialise MPI over SSH, so launch SSHD
+mkdir -p /var/run/sshd
+ssh-keygen -A
+exec /usr/sbin/sshd -D -p "${SSH_PORT:-22}"

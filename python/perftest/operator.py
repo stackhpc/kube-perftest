@@ -387,10 +387,7 @@ async def handle_benchmark_set_created(body, **kwargs):
     benchmark_set = api.BenchmarkSet.parse_obj(body)
     # Update the count before we create anything
     # We can calculate this without producing any permutations
-    benchmark_set.status.count = math.prod(
-        len(vs)
-        for vs in benchmark_set.spec.permutations.values()
-    )
+    benchmark_set.status.count = benchmark_set.spec.permutations.get_count()
     if benchmark_set.status.succeeded is None:
         benchmark_set.status.succeeded = 0
         benchmark_set.status.failed = 0
@@ -399,14 +396,7 @@ async def handle_benchmark_set_created(body, **kwargs):
     # We do this so that benchmarks are ordered by default
     padding_width = math.floor(math.log(benchmark_set.status.count, 10)) + 1
     # Produce the resources for the benchmark set
-    permutations = (
-        dict(permutation)
-        for permutation in itertools.product(*(
-            [(k, v) for v in vs]
-            for k, vs in benchmark_set.spec.permutations.items()
-        ))
-    )
-    for idx, permutation in enumerate(permutations):
+    for idx, permutation in enumerate(benchmark_set.spec.permutations.get_permutations()):
         resource = {
             "apiVersion": benchmark_set.spec.template.api_version,
             "kind": benchmark_set.spec.template.kind,
