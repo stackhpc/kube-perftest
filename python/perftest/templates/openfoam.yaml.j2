@@ -176,7 +176,7 @@ spec:
           {%- if not benchmark.spec.host_network %}
           # If running with CNI networking, spread the workers evenly across eligible nodes
           topologySpreadConstraints:
-            - maxSkew: 2
+            - maxSkew: 1
               topologyKey: "kubernetes.io/hostname"
               whenUnsatisfiable: DoNotSchedule
               labelSelector:
