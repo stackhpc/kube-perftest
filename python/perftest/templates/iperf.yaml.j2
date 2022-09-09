@@ -103,7 +103,7 @@ spec:
           restartPolicy: OnFailure
           # Use an init container to wait for the server to become available
           initContainers:
-            - name: iper-client-init
+            - name: iperf-client-init
               image: {{ benchmark.spec.image }}
               imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
               command:

@@ -1,4 +1,3 @@
-import itertools as it
 import re
 import typing as t
 
@@ -8,34 +7,42 @@ from kube_custom_resource import schema
 
 from ...config import settings
 from ...errors import PodLogFormatError, PodResultsIncompleteError
-from ...template import Loader
-from ...utils import format_amount
 
 from . import base
 
-#MPI_PINGPONG_UNITS = re.compile(
-#    r"t\[(?P<time>[^\]]+)\]"
-#    r"\s+"
-#    r"(?P<bandwidth>\w?bytes/sec)"
-#)
-#MPI_PINGPONG_RESULT = re.compile(
-#    r"^"
-#    r"(?P<bytes>\d+)"
-#    r"\s+"
-#    r"(?P<repetitions>\d+)"
-#    r"\s+"
-#    r"(?P<time>\d+\.\d+)"
-#    r"\s+"
-#    r"(?P<bandwidth>\d+\.\d+)"
-#)
+
+TIME_REGEX = re.compile(r"^(?P<type>real|user|sys)\s+(?P<time>\d+\.\d+)")
 
 
-class MPIOpenFOAMSpec(schema.BaseModel):
+class OpenFOAMProblemSize(str, schema.Enum):
+    """
+    Enumeration of possible OpenFOAM problem sizes.
+    """
+    SMALL = "S"
+    MEDIUM = "M"
+    EXTRA_LARGE = "XL"
+    EXTRA_EXTRA_LARGE = "XXL"
+
+
+class OpenFOAMIterativeMethod(str, schema.Enum):
+    """
+    Enumeration of possible OpenFOAM iterative methods.
+    """
+    FIXED_ITER = "fixedITER"
+    FIXED_NORM = "fixedNORM"
+    FOAM_DIC_PCG_FIXED_NORM = "FOAM-DIC-PCG.fixedNORM"
+    FOAM_GAMG_PCG_FIXED_NORM = "FOAM-GAMG-PCG.fixedNORM"
+    PETSC_AMG_CG_FIXED_NORM = "PETSc-AMG-CG.fixedNORM"
+    PETSC_AMG_CG_FIXED_NORM_CACHING = "PETSc-AMG-CG.fixedNORM.caching"
+    PETSC_ICC_CG_FIXED_NAME = "PETSc-ICC-CG.fixedNORM"
+
+
+class OpenFOAMSpec(schema.BaseModel):
     """
     Defines the parameters for the openFOAM benchmark.
     """
     image: constr(min_length = 1) = Field(
-        f"{settings.default_image_prefix}openfoam :{settings.default_image_tag}",
+        f"{settings.default_image_prefix}openfoam:{settings.default_image_tag}",
         description = "The image to use for the benchmark."
     )
     image_pull_policy: base.ImagePullPolicy = Field(
@@ -50,34 +57,33 @@ class MPIOpenFOAMSpec(schema.BaseModel):
         False,
         description = "Indicates whether to use host networking or not."
     )
-    # This should be an Enum
-    problem_size: constr(min_length = 1) = Field(
-        "S",
-        description = "The problem size for the 3-D Lid Driven cavity flow benchmark"
+    problem_size: OpenFOAMProblemSize = Field(
+        OpenFOAMProblemSize.SMALL,
+        description = "The problem size for the 3-D Lid Driven cavity flow benchmark."
     )
-    # This should be an Enum
-    iterative_method: constr(min_length = 1) = Field(
-        "S",
-        description = "The iterative method for the 3-D Lid Driven cavity flow benchmark"
+    iterative_method: OpenFOAMIterativeMethod = Field(
+        OpenFOAMIterativeMethod.FIXED_NORM,
+        description = "The iterative method for the 3-D Lid Driven cavity flow benchmark."
     )
-    n_proc: schema.conint(gt = 0) = Field(
+    num_procs: schema.conint(gt = 0) = Field(
         1,
-        description = "The number of MPI processes"
+        description = "The number of MPI worker processes."
     )
-    n_workers: schema.conint(gt = 0) = Field(
+    num_workers: schema.conint(gt = 0) = Field(
         1,
-        description = "The number of MPI worker pods"
+        description = "The number of MPI worker pods."
     )
 
-class MPIOpenFOAMResult(schema.BaseModel):
+
+class OpenFOAMResult(schema.BaseModel):
     """
     Represents an individual MPI openFOAM result.
     """
-    real_time: schema.conint(ge = 0) = Field(
+    wallclock_time: schema.confloat(ge = 0) = Field(
         ...,
         description = "The real time taken to complete the benchmark."
     )
-    user_time: schema.conint(ge = 0) = Field(
+    user_time: schema.confloat(ge = 0) = Field(
         ...,
         description = "The user time taken to complete the benchmark."
     )
@@ -86,32 +92,18 @@ class MPIOpenFOAMResult(schema.BaseModel):
         description = "The sys time taken to complete the benchmark."
     )
 
-class MPIOpenFOAMStatus(base.BenchmarkStatus):
+
+class OpenFOAMStatus(base.BenchmarkStatus):
     """
     Represents the status of the iperf benchmark.
     """
-    bandwidth_units: t.Optional[constr(min_length = 1)] = Field(
+    result: t.Optional[OpenFOAMResult] = Field(
         None,
-        description = "The units that the bandwidth is reported in."
-    )
-    time_units: t.Optional[constr(min_length = 1)] = Field(
-        None,
-        description = "The units that the time is reported in."
-    )
-    results: t.List[MPIPingPongResult] = Field(
-        default_factory = list,
-        description = "List of results for each message length."
-    )
-    peak_bandwidth: t.Optional[constr(min_length = 1)] = Field(
-        None,
-        description = (
-            "The peak bandwidth achieved during the benchmark for any given message length. "
-            "Used as a headline result."
-        )
+        description = "The result of the benchmark."
     )
 
 
-class MPIOpenFOAM(
+class OpenFOAM(
     base.Benchmark,
     subresources = {"status": {}},
     printer_columns = [
@@ -119,6 +111,21 @@ class MPIOpenFOAM(
             "name": "Host Network",
             "type": "boolean",
             "jsonPath": ".spec.hostNetwork",
+        },
+        {
+            "name": "Problem Size",
+            "type": "string",
+            "jsonPath": ".spec.problemSize",
+        },
+        {
+            "name": "Num Procs",
+            "type": "integer",
+            "jsonPath": ".spec.numProcs",
+        },
+        {
+            "name": "Num Workers",
+            "type": "integer",
+            "jsonPath": ".spec.numWorkers",
         },
         {
             "name": "Status",
@@ -131,21 +138,21 @@ class MPIOpenFOAM(
             "jsonPath": ".status.finishedAt",
         },
         {
-            "name": "Peak Bandwidth",
-            "type": "string",
-            "jsonPath": ".status.peakBandwidth",
+            "name": "Wall time",
+            "type": "number",
+            "jsonPath": ".status.result.wallclockTime",
         },
     ]
 ):
     """
     Custom resource for running an iperf benchmark.
     """
-    spec: MPIPingPongSpec = Field(
+    spec: OpenFOAMSpec = Field(
         ...,
         description = "The parameters for the benchmark."
     )
-    status: MPIPingPongStatus = Field(
-        default_factory = MPIPingPongStatus,
+    status: OpenFOAMStatus = Field(
+        default_factory = OpenFOAMStatus,
         description = "The status of the benchmark."
     )
 
@@ -161,45 +168,32 @@ class MPIOpenFOAM(
         if pod.get("status", {}).get("phase", "Unknown") != "Succeeded":
             return
         pod_log = await fetch_pod_log()
-        # Drop the lines from the log until we reach the start of the results
-        lines = it.dropwhile(lambda l: not l.strip().startswith("#bytes"), pod_log.splitlines())
-        # Extract the bandwidth units from the header
-        match = MPI_PINGPONG_UNITS.search(next(lines))
-        if match is not None:
-            self.status.bandwidth_units = match.group("bandwidth")
-            self.status.time_units = match.group("time")
-        else:
-            raise PodLogFormatError("unable to get bandwidth units from pod log", pod_log)
-        # Collect the results for each message size
-        results = []
-        for line in lines:
-            match = MPI_PINGPONG_RESULT.search(line.strip())
+        # Extract the time info from the pod log
+        wallclock_time = None
+        user_time = None
+        sys_time = None
+        for line in pod_log.splitlines():
+            match = TIME_REGEX.match(line)
             if match is not None:
-                results.append(
-                    MPIPingPongResult(
-                        bytes = match.group("bytes"),
-                        repetitions = match.group("repetitions"),
-                        time = match.group("time"),
-                        bandwidth = match.group("bandwidth")
-                    )
-                )
-            else:
-                break
-        if results:
-            self.status.results = results
-        else:
-            raise PodLogFormatError("unable to locate results in pod log", pod_log)
+                if match.group("type") == "real":
+                    wallclock_time = match.group("time")
+                elif match.group("type") == "user":
+                    user_time = match.group("time")
+                elif match.group("type") == "sys":
+                    sys_time = match.group("time")
+                else:
+                    raise PodLogFormatError("this is impossible", pod_log)
+        if wallclock_time is None or user_time is None or sys_time is None:
+            raise PodLogFormatError("unable to extract timing information", pod_log)
+        self.status.result = OpenFOAMResult(
+            wallclock_time = wallclock_time,
+            user_time = user_time,
+            sys_time = sys_time
+        )
 
     def summarise(self):
         """
         Update the status of this benchmark with overall results.
         """
-        if not self.status.results:
+        if not self.status.result:
             raise PodResultsIncompleteError("pod results not available yet")
-        # Find the result with the peak bandwidth
-        peak_result = self.status.results[0]
-        for result in self.status.results[1:]:
-            if result.bandwidth > peak_result.bandwidth:
-                peak_result = result
-        # Format the result for display
-        self.status.peak_bandwidth = f"{peak_result.bandwidth} {self.status.bandwidth_units}"

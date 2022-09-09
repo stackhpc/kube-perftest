@@ -21,7 +21,7 @@ metadata:
     {{ settings.name_label }}: {{ benchmark.metadata.name }}
 spec:
   maxRetry: 10
-  minAvailable: 3
+  minAvailable: {{ benchmark.spec.num_workers + 1 }}
   queue: {{ settings.queue_name }}
   schedulerName: {{ settings.scheduler_name }}
   priorityClassName: {{ benchmark.status.priority_class_name }}
@@ -66,9 +66,9 @@ spec:
                   value: "{{ benchmark.spec.ssh_port }}"
               command:
                 - /usr/local/bin/mpi-master
-                - {{ benchmark.spec.problem_size }} # S, M, L
-                - {{ benchmark.spec.iterative_method }} # fixedNORM etc
-                - {{ benchmark.spec.n_proc }}
+                - {{ benchmark.spec.problem_size }}
+                - {{ benchmark.spec.iterative_method }}
+                - "{{ benchmark.spec.num_procs }}"
               volumeMounts:
                 - name: ssh-config
                   mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
@@ -80,7 +80,7 @@ spec:
                 name: {{ benchmark.metadata.name }}-ssh-config
 
     - name: mpi-worker
-      replicas: {{ benchmark.spec.n_workers }}
+      replicas: {{ benchmark.spec.num_workers }}
       template:
         metadata:
           labels:
@@ -113,6 +113,7 @@ spec:
             - name: ssh-config
               configMap:
                 name: {{ benchmark.metadata.name }}-ssh-config
+          {%- if benchmark.spec.host_network %}
           affinity:
             podAntiAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
@@ -121,3 +122,23 @@ spec:
                       - key: {{ settings.kind_label }}
                         operator: Exists
                   topologyKey: "kubernetes.io/hostname"
+          {%- else %}
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: "kubernetes.io/hostname"
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector:
+                matchExpressions:
+                  - key: {{ settings.kind_label }}
+                    operator: In
+                    values:
+                      - {{ benchmark.kind }}
+                  - key: {{ settings.namespace_label }}
+                    operator: In
+                    values:
+                      - {{ benchmark.metadata.namespace }}
+                  - key: {{ settings.name_label }}
+                    operator: In
+                    values:
+                      - {{ benchmark.metadata.name }}
+          {%- endif %}
