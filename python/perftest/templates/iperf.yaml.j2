@@ -1,4 +1,4 @@
-{%- if benchmark.spec.mode == "PodToService" %}
+{%- if benchmark.spec.server_service %}
 ---
 apiVersion: v1
 kind: Service
@@ -6,6 +6,7 @@ metadata:
   name: {{ benchmark.metadata.name }}-server
   labels:
     {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
     {{ settings.name_label }}: {{ benchmark.metadata.name }}
 spec:
   ports:
@@ -14,6 +15,7 @@ spec:
       protocol: TCP
   selector:
     {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
     {{ settings.name_label }}: {{ benchmark.metadata.name }}
     {{ settings.component_label }}: server
 {%- endif %}
@@ -24,6 +26,7 @@ metadata:
   name: {{ benchmark.metadata.name }}
   labels:
     {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
     {{ settings.name_label }}: {{ benchmark.metadata.name }}
 spec:
   maxRetry: 10
@@ -45,6 +48,7 @@ spec:
         metadata:
           labels:
             {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
             {{ settings.name_label }}: {{ benchmark.metadata.name }}
             {{ settings.component_label }}: server
         spec:
@@ -59,6 +63,8 @@ spec:
               imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
               args:
                 - --server
+                - --len
+                - "{{ benchmark.spec.buffer_size }}"
               ports:
                 - name: iperf-server
                   containerPort: 5001
@@ -85,6 +91,7 @@ spec:
         metadata:
           labels:
             {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
             {{ settings.name_label }}: {{ benchmark.metadata.name }}
             {{ settings.component_label }}: client
         spec:
@@ -103,10 +110,10 @@ spec:
                 - bash
                 - -c
                 - |
-                    {%- if benchmark.spec.mode == "PodToPod" %}
-                    IPERF_SERVER="${VC_IPERF_SERVER_HOSTS}"
-                    {%- else %}
+                    {%- if benchmark.spec.server_service %}
                     IPERF_SERVER="{{ benchmark.metadata.name }}-server"
+                    {%- else %}
+                    IPERF_SERVER="${VC_IPERF_SERVER_HOSTS}"
                     {%- endif %}
                     until nc -z "${IPERF_SERVER}" 5001; do
                         echo "Waiting for server to become available..."
@@ -117,10 +124,10 @@ spec:
               imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
               args:
                 - --client
-                {%- if benchmark.spec.mode == "PodToPod" %}
-                - "$(VC_IPERF_SERVER_HOSTS)"
-                {%- else %}
+                {%- if benchmark.spec.server_service %}
                 - "{{ benchmark.metadata.name }}-server"
+                {%- else %}
+                - "$(VC_IPERF_SERVER_HOSTS)"
                 {%- endif %}
                 - --time
                 - "{{ benchmark.spec.duration }}"
@@ -128,6 +135,8 @@ spec:
                 - "{{ benchmark.spec.streams }}"
                 - --format
                 - k
+                - --len
+                - "{{ benchmark.spec.buffer_size }}"
           # Because we generally want to test raw network performance, prevent the pod
           # from running on a node that already has another benchmark component running,
           # for any benchmark

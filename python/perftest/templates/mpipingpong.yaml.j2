@@ -1,10 +1,23 @@
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ benchmark.metadata.name }}-ssh-config
+  labels:
+    {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+    {{ settings.name_label }}: {{ benchmark.metadata.name }}
+data:
+  01-default-port.conf: |
+    Port {{ benchmark.spec.ssh_port }}
+---
 apiVersion: batch.volcano.sh/v1alpha1
 kind: Job
 metadata:
   name: {{ benchmark.metadata.name }}
   labels:
     {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
     {{ settings.name_label }}: {{ benchmark.metadata.name }}
 spec:
   maxRetry: 10
@@ -17,7 +30,7 @@ spec:
     mpi:
       - --master=mpi-master
       - --worker=mpi-worker
-      - --port=22
+      - --port={{ benchmark.spec.ssh_port }}
     ssh: []
     svc:
       - --disable-network-policy
@@ -35,24 +48,41 @@ spec:
         metadata:
           labels:
             {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
             {{ settings.name_label }}: {{ benchmark.metadata.name }}
             {{ settings.component_label }}: master
         spec:
           priorityClassName: {{ benchmark.status.priority_class_name }}
+          {%- if benchmark.spec.host_network %}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          {%- endif %}
           restartPolicy: OnFailure
           containers:
             - name: mpi-master
               image: {{ benchmark.spec.image }}
               imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              env:
+                - name: SSH_PORT
+                  value: "{{ benchmark.spec.ssh_port }}"
               command:
                 - mpi-master
                 - --allow-run-as-root
-                - --host
-                - "$(MPI_HOST)"
+                - --hostfile
+                - /etc/volcano/mpi_worker.host
                 - -np
                 - "2"
                 - mpitests-IMB-MPI1
                 - pingpong
+              volumeMounts:
+                - name: ssh-config
+                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
+                  subPath: 01-default-port.conf
+                  readOnly: true
+          volumes:
+            - name: ssh-config
+              configMap:
+                name: {{ benchmark.metadata.name }}-ssh-config
 
     - name: mpi-worker
       replicas: 2
@@ -60,14 +90,41 @@ spec:
         metadata:
           labels:
             {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
             {{ settings.name_label }}: {{ benchmark.metadata.name }}
             {{ settings.component_label }}: worker
         spec:
           priorityClassName: {{ benchmark.status.priority_class_name }}
+          {%- if benchmark.spec.host_network %}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          {%- endif %}
           restartPolicy: OnFailure
           containers:
             - name: mpi-worker
               image: {{ benchmark.spec.image }}
               imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              env:
+                - name: SSH_PORT
+                  value: "{{ benchmark.spec.ssh_port }}"
               command:
                 - mpi-worker
+              volumeMounts:
+                - name: ssh-config
+                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
+                  subPath: 01-default-port.conf
+                  readOnly: true
+          volumes:
+            - name: ssh-config
+              configMap:
+                name: {{ benchmark.metadata.name }}-ssh-config
+          # Because we want to test raw network performance, prevent the pod from running on
+          # a node that already has another benchmark component running, for any benchmark
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.kind_label }}
+                        operator: Exists
+                  topologyKey: "kubernetes.io/hostname"

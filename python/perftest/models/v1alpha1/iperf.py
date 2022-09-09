@@ -2,26 +2,15 @@ import itertools as it
 import re
 import typing as t
 
-from pydantic import Field, constr
+from pydantic import Field, validator, constr
 
 from kube_custom_resource import schema
 
 from ...config import settings
 from ...errors import PodLogFormatError, PodResultsIncompleteError
-from ...template import Loader
 from ...utils import format_amount
 
 from . import base
-
-
-class IPerfMode(str, schema.Enum):
-    """
-    Enumeration of possible modes for iperf benchmarks.
-    """
-    # The client uses the pod IP of the server
-    POD_TO_POD = "PodToPod"
-    # The client uses the IP of a service that targets the server
-    POD_TO_SERVICE = "PodToService"
 
 
 class IPerfSpec(schema.BaseModel):
@@ -36,13 +25,13 @@ class IPerfSpec(schema.BaseModel):
         base.ImagePullPolicy.IF_NOT_PRESENT,
         description = "The pull policy for the image."
     )
-    mode: IPerfMode = Field(
-        ...,
-        description = "The mode to use."
-    )
     host_network: bool = Field(
         False,
         description = "Indicates whether to use host networking or not."
+    )
+    server_service: bool = Field(
+        False,
+        description = "Indicates whether to access the server via a service or not."
     )
     duration: schema.conint(gt = 0) = Field(
         ...,
@@ -51,6 +40,10 @@ class IPerfSpec(schema.BaseModel):
     streams: schema.conint(gt = 0) = Field(
         ...,
         description = "The number of streams to use."
+    )
+    buffer_size: schema.conint(gt = 0) = Field(
+        128 * 1024,  # 128K
+        description = "The length of the read/write buffer in bytes."
     )
 
 
@@ -101,14 +94,14 @@ class IPerf(
     subresources = {"status": {}},
     printer_columns = [
         {
-            "name": "Mode",
-            "type": "string",
-            "jsonPath": ".spec.mode",
-        },
-        {
             "name": "Host Network",
             "type": "boolean",
             "jsonPath": ".spec.hostNetwork",
+        },
+        {
+            "name": "Server Service",
+            "type": "string",
+            "jsonPath": ".spec.serverService",
         },
         {
             "name": "Duration",
@@ -119,6 +112,11 @@ class IPerf(
             "name": "Streams",
             "type": "integer",
             "jsonPath": ".spec.streams",
+        },
+        {
+            "name": "Buffer Size",
+            "type": "integer",
+            "jsonPath": ".spec.bufferSize",
         },
         {
             "name": "Status",
@@ -174,14 +172,14 @@ class IPerf(
                 if match is not None:
                     result = IPerfSingleResult(transfer = match.group(2), bandwidth = match.group(3))
                 else:
-                    raise PodLogFormatError("Pod log is not of the expected format")
+                    raise PodLogFormatError("pod log is not of the expected format", pod_log)
                 if match.group(1) == "SUM":
                     sum_result = result
                     break
                 else:
                     stream_results[match.group(1)] = result
             else:
-                raise PodLogFormatError("Pod log is not of the expected format")
+                raise PodLogFormatError("pod log is not of the expected format", pod_log)
             # There should only ever be one completed pod for iperf, so we just override the result
             self.status.result = IPerfResult(
                 streams = stream_results,
@@ -194,7 +192,7 @@ class IPerf(
         """
         # If the result is not set yet, bail
         if not self.status.result:
-            raise PodResultsIncompleteError("Client pod has not recorded a result yet")
+            raise PodResultsIncompleteError("client pod has not recorded a result yet")
         # For the summary result, we use the combined bandwidth
         # However we want to convert it from Kbits/sec to something friendlier
         amount, prefix = format_amount(self.status.result.sum.bandwidth, "K")

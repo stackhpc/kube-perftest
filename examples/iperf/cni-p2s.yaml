@@ -4,7 +4,7 @@ metadata:
   name: iperf-cni-p2s
 spec:
   imagePullPolicy: Always
-  mode: PodToService
   hostNetwork: false
+  serverService: true
   duration: 30
   streams: 16

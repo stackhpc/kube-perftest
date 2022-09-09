@@ -76,7 +76,9 @@ async def on_startup(**kwargs):
         PRIORITY_LOCK = asyncio.Lock()
         # Install the CRDs for the models in the registry
         for crd in REGISTRY:
-            await EK_CLIENT.apply_object(crd.kubernetes_resource())
+            # We include default values in the CRDs, as freezing defaults at create
+            # time is appropriate for our use case
+            await EK_CLIENT.apply_object(crd.kubernetes_resource(include_defaults = True))
     except Exception:
         logger.exception("error during initialisation - exiting")
         sys.exit(1)
