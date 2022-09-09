@@ -27,10 +27,6 @@ spec:
   priorityClassName: {{ benchmark.status.priority_class_name }}
   plugins:
     env: []
-    mpi:
-      - --master=mpi-master
-      - --worker=mpi-worker
-      - --port={{ benchmark.spec.ssh_port }}
     ssh: []
     svc:
      - --disable-network-policy
@@ -78,6 +74,31 @@ spec:
             - name: ssh-config
               configMap:
                 name: {{ benchmark.metadata.name }}-ssh-config
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                # Avoid pods from other jobs
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.kind_label }}
+                        operator: NotIn
+                        values:
+                          - {{ benchmark.kind }}
+                  topologyKey: "kubernetes.io/hostname"
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.namespace_label }}
+                        operator: NotIn
+                        values:
+                          - {{ benchmark.metadata.namespace }}
+                  topologyKey: "kubernetes.io/hostname"
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.name_label }}
+                        operator: NotIn
+                        values:
+                          - {{ benchmark.metadata.name }}
+                  topologyKey: "kubernetes.io/hostname"
 
     - name: mpi-worker
       replicas: {{ benchmark.spec.num_workers }}
@@ -102,6 +123,10 @@ spec:
               env:
                 - name: SSH_PORT
                   value: "{{ benchmark.spec.ssh_port }}"
+              ports:
+                - name: ssh
+                  containerPort: {{ benchmark.spec.ssh_port }}
+                  protocol: TCP
               command:
                 - /usr/local/bin/mpi-worker
               volumeMounts:
@@ -113,20 +138,47 @@ spec:
             - name: ssh-config
               configMap:
                 name: {{ benchmark.metadata.name }}-ssh-config
-          {%- if benchmark.spec.host_network %}
           affinity:
             podAntiAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
+                # Avoid pods from other jobs
                 - labelSelector:
                     matchExpressions:
                       - key: {{ settings.kind_label }}
-                        operator: Exists
+                        operator: NotIn
+                        values:
+                          - {{ benchmark.kind }}
                   topologyKey: "kubernetes.io/hostname"
-          {%- else %}
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.namespace_label }}
+                        operator: NotIn
+                        values:
+                          - {{ benchmark.metadata.namespace }}
+                  topologyKey: "kubernetes.io/hostname"
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.name_label }}
+                        operator: NotIn
+                        values:
+                          - {{ benchmark.metadata.name }}
+                  topologyKey: "kubernetes.io/hostname"
+                {%- if benchmark.spec.host_network %}
+                # Avoid other workers from our own job if running with host networking
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.component_label }}
+                        operator: In
+                        values:
+                          - worker
+                  topologyKey: "kubernetes.io/hostname"
+                {%- endif %}
+          {%- if not benchmark.spec.host_network %}
+          # If running with CNI networking, spread the workers evenly across eligible nodes
           topologySpreadConstraints:
-            - maxSkew: 1
+            - maxSkew: 2
               topologyKey: "kubernetes.io/hostname"
-              whenUnsatisfiable: ScheduleAnyway
+              whenUnsatisfiable: DoNotSchedule
               labelSelector:
                 matchExpressions:
                   - key: {{ settings.kind_label }}
@@ -141,4 +193,8 @@ spec:
                     operator: In
                     values:
                       - {{ benchmark.metadata.name }}
+                  - key: {{ settings.component_label }}
+                    operator: In
+                    values:
+                      - worker
           {%- endif %}
