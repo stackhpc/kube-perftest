@@ -66,7 +66,9 @@ class Configuration(BaseConfiguration):
     component_label: constr(min_length = 1) = None
 
     #: The default priority when there are no existing priority classes
-    initial_priority: int = 1000000000  # This is lower than the system-critical priorityclasses
+    #: By default this is one lower than the maximum user priority
+    #: The maximum priority is used for the controller pod
+    initial_priority: int = 999999999
     #: The prefix to use for priority class names
     priority_class_prefix: constr(min_length = 1) = "kube-perftest-"
 
