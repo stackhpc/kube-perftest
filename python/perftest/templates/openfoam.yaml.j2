@@ -145,6 +145,16 @@ spec:
               configMap:
                 name: {{ benchmark.metadata.name }}-ssh-config
           affinity:
+            # In order to prevent topologySpreadConstraints from considering
+            # the control-plane nodes, we have to explicitly exclude them here
+            # 1.25 adds "nodeTaintsPolicy: Honor" to topologySpreadConstraints as
+            # an alpha-level field that should allow us to remove this
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: node-role.kubernetes.io/control-plane
+                        operator: DoesNotExist
             podAntiAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
                 # Avoid pods from other jobs
@@ -187,7 +197,7 @@ spec:
           topologySpreadConstraints:
             - maxSkew: 1
               topologyKey: "kubernetes.io/hostname"
-              whenUnsatisfiable: ScheduleAnyway
+              whenUnsatisfiable: DoNotSchedule
               labelSelector:
                 matchLabels:
                   {{ settings.kind_label }}: {{ benchmark.kind }}
