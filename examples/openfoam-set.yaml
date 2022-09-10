@@ -10,26 +10,18 @@ spec:
       name: openfoam
     spec:
       imagePullPolicy: Always
+      numProcs: 48
   permutations:
+    # Produce a matrix of jobs with hostNetwork=false
+    product:
+      hostNetwork: [false]
+      problemSize: [S, M]
+      numWorkers: [2, 4, 8, 12, 16, 24, 48]
+    # Produce an explcit job for each problem size for hostNetwork=true
     explicit:
-      - hostNetwork: false
-        numProcs: 48
-        numWorkers: 2
-      - hostNetwork: false
-        numProcs: 48
-        numWorkers: 4
-      - hostNetwork: false
-        numProcs: 48
-        numWorkers: 8
-      - hostNetwork: false
-        numProcs: 48
-        numWorkers: 16
-      - hostNetwork: false
-        numProcs: 48
-        numWorkers: 24
-      - hostNetwork: false
-        numProcs: 48
-        numWorkers: 48
       - hostNetwork: true
-        numProcs: 48
+        problemSize: S
+        numWorkers: 2
+      - hostNetwork: true
+        problemSize: M
         numWorkers: 2
