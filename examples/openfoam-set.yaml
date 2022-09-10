@@ -11,17 +11,13 @@ spec:
     spec:
       imagePullPolicy: Always
       numProcs: 48
+      problemSize: S
   permutations:
     # Produce a matrix of jobs with hostNetwork=false
     product:
       hostNetwork: [false]
-      problemSize: [S, M]
       numWorkers: [2, 4, 8, 12, 16, 24, 48]
-    # Produce an explcit job for each problem size for hostNetwork=true
+    # Produce an explcit job for hostNetwork=true
     explicit:
       - hostNetwork: true
-        problemSize: S
-        numWorkers: 2
-      - hostNetwork: true
-        problemSize: M
         numWorkers: 2
