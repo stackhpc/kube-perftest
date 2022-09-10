@@ -1,4 +1,5 @@
 import datetime
+import ipaddress
 import typing as t
 
 from pydantic import Field, constr
@@ -65,6 +66,35 @@ class ResourceRef(schema.BaseModel):
         ...,
         description = "The name of the resource."
     )
+
+
+class PodInfo(schema.BaseModel):
+    """
+    Model for basic information about a pod.
+    """
+    pod_ip: ipaddress.IPv4Address = Field(
+        ...,
+        description = "The IP of the pod."
+    )
+    node_name: constr(min_length = 1) = Field(
+        ...,
+        description = "The name of the node that the pod was scheduled on."
+    )
+    node_ip: ipaddress.IPv4Address = Field(
+        ...,
+        description = "The IP of the node that the pod was scheduled on."
+    )
+
+    @classmethod
+    def from_pod(cls, pod: t.Dict[str, t.Any]) -> 'PodInfo':
+        """
+        Returns a new pod info object from the given pod.
+        """
+        return cls(
+            pod_ip = pod["status"]["podIP"],
+            node_name = pod["spec"]["nodeName"],
+            node_ip = pod["status"]["hostIP"]
+        )
 
 
 class BenchmarkStatus(schema.BaseModel):

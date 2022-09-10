@@ -148,7 +148,7 @@ spec:
             # In order to prevent topologySpreadConstraints from considering
             # the control-plane nodes, we have to explicitly exclude them here
             # 1.25 adds "nodeTaintsPolicy: Honor" to topologySpreadConstraints as
-            # an alpha-level field that should allow us to remove this
+            # an alpha-level field that should allow us to remove this
             nodeAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
                 nodeSelectorTerms:

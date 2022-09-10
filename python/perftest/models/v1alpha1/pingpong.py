@@ -97,6 +97,18 @@ class MPIPingPongStatus(base.BenchmarkStatus):
             "Used as a headline result."
         )
     )
+    master_log: t.Optional[constr(min_length = 1)] = Field(
+        None,
+        description = "The raw pod log of the MPI master pod."
+    )
+    master_pod: t.Optional[base.PodInfo] = Field(
+        None,
+        description = "Pod information for the MPI master pod."
+    )
+    worker_pods: schema.Dict[str, base.PodInfo] = Field(
+        default_factory = dict,
+        description = "Pod information for the worker pods, indexed by pod name."
+    )
 
 
 class MPIPingPong(
@@ -142,52 +154,54 @@ class MPIPingPong(
         pod: t.Dict[str, t.Any],
         fetch_pod_log: t.Callable[[], t.Awaitable[str]]
     ):
-        # If the pod is not a master, we are done
-        if pod["metadata"]["labels"][settings.component_label] != "master":
-            return
-        # If the pod is not succeeded, we are also done
-        if pod.get("status", {}).get("phase", "Unknown") != "Succeeded":
-            return
-        pod_log = await fetch_pod_log()
+        pod_phase = pod.get("status", {}).get("phase", "Unknown")
+        pod_component = pod["metadata"]["labels"][settings.component_label]
+        if pod_component == "master":
+            if pod_phase == "Running":
+                self.status.master_pod = base.PodInfo.from_pod(pod)
+            elif pod_phase == "Succeeded":
+                self.status.master_log = await fetch_pod_log()
+        elif pod_phase == "Running":
+            self.status.worker_pods[pod["metadata"]["name"]] = base.PodInfo.from_pod(pod)
+
+    def summarise(self):
+        """
+        Update the status of this benchmark with overall results.
+        """
+        if not self.status.master_log:
+            raise PodResultsIncompleteError("master pod has not recorded a log yet")
         # Drop the lines from the log until we reach the start of the results
-        lines = it.dropwhile(lambda l: not l.strip().startswith("#bytes"), pod_log.splitlines())
+        lines = it.dropwhile(
+            lambda l: not l.strip().startswith("#bytes"),
+            self.status.master_log.splitlines()
+        )
         # Extract the bandwidth units from the header
         match = MPI_PINGPONG_UNITS.search(next(lines))
         if match is not None:
             self.status.bandwidth_units = match.group("bandwidth")
             self.status.time_units = match.group("time")
         else:
-            raise PodLogFormatError("unable to get bandwidth units from pod log", pod_log)
-        # Collect the results for each message size
+            raise PodLogFormatError("unable to get bandwidth units from pod log")
+        # Collect the results for each message size along with the peak result
         results = []
+        peak_result = None
         for line in lines:
             match = MPI_PINGPONG_RESULT.search(line.strip())
             if match is not None:
-                results.append(
-                    MPIPingPongResult(
-                        bytes = match.group("bytes"),
-                        repetitions = match.group("repetitions"),
-                        time = match.group("time"),
-                        bandwidth = match.group("bandwidth")
-                    )
+                result = MPIPingPongResult(
+                    bytes = match.group("bytes"),
+                    repetitions = match.group("repetitions"),
+                    time = match.group("time"),
+                    bandwidth = match.group("bandwidth")
                 )
+                results.append(result)
+                if not peak_result or result.bandwidth > peak_result.bandwidth:
+                    peak_result = result
             else:
                 break
         if results:
             self.status.results = results
         else:
-            raise PodLogFormatError("unable to locate results in pod log", pod_log)
-
-    def summarise(self):
-        """
-        Update the status of this benchmark with overall results.
-        """
-        if not self.status.results:
-            raise PodResultsIncompleteError("pod results not available yet")
-        # Find the result with the peak bandwidth
-        peak_result = self.status.results[0]
-        for result in self.status.results[1:]:
-            if result.bandwidth > peak_result.bandwidth:
-                peak_result = result
-        # Format the result for display
+            raise PodLogFormatError("unable to locate results in pod log")
+        # Format the peak result for display
         self.status.peak_bandwidth = f"{peak_result.bandwidth} {self.status.bandwidth_units}"

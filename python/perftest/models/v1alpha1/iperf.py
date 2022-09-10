@@ -2,7 +2,7 @@ import itertools as it
 import re
 import typing as t
 
-from pydantic import Field, validator, constr
+from pydantic import Field, constr
 
 from kube_custom_resource import schema
 
@@ -41,10 +41,6 @@ class IPerfSpec(schema.BaseModel):
         ...,
         description = "The number of streams to use."
     )
-    buffer_size: schema.conint(gt = 0) = Field(
-        128 * 1024,  # 128K
-        description = "The length of the read/write buffer in bytes."
-    )
 
 
 class IPerfSingleResult(schema.BaseModel):
@@ -57,7 +53,7 @@ class IPerfSingleResult(schema.BaseModel):
     )
     bandwidth: schema.conint(ge = 0) = Field(
         ...,
-        description = "The average bandwidth for the transfer."
+        description = "The average bandwidth for the transfer in Kbits/sec."
     )
 
 
@@ -87,6 +83,18 @@ class IPerfStatus(base.BenchmarkStatus):
         None,
         description = "The complete result for the benchmark."
     )
+    client_log: t.Optional[constr(min_length = 1)] = Field(
+        None,
+        description = "The raw pod log of the client pod."
+    )
+    server_pod: t.Optional[base.PodInfo] = Field(
+        None,
+        description = "Pod information for the server pod."
+    )
+    client_pod: t.Optional[base.PodInfo] = Field(
+        None,
+        description = "Pod information for the client pod."
+    )
 
 
 class IPerf(
@@ -112,11 +120,6 @@ class IPerf(
             "name": "Streams",
             "type": "integer",
             "jsonPath": ".spec.streams",
-        },
-        {
-            "name": "Buffer Size",
-            "type": "integer",
-            "jsonPath": ".spec.bufferSize",
         },
         {
             "name": "Status",
@@ -152,52 +155,50 @@ class IPerf(
         pod: t.Dict[str, t.Any],
         fetch_pod_log: t.Callable[[], t.Awaitable[str]]
     ):
-        """
-        Update the status of this benchmark to reflect a modification to one of its pods.
-
-        Receives the pod instance and an async function that can be called to get the pod log.
-        """
-        # When a pod succeeds, derive a result from the pod log and save it
         pod_phase = pod.get("status", {}).get("phase", "Unknown")
-        if pod_phase == "Succeeded":
-            pod_log = await fetch_pod_log()
-            # Drop the lines from the log until we reach the start of the results
-            lines = it.dropwhile(lambda l: re.match(r"^\[ *ID\]", l) is None, pod_log.splitlines())
-            # Drop the header line
-            _ = next(lines)
-            # Collect stream results until the end of the log
-            stream_results = {}
-            for line in lines:
-                match = re.search(r"^\[ *([a-zA-Z0-9]+)\].*?(\d+) KBytes +(\d+) Kbits/sec", line)
-                if match is not None:
-                    stream_results[match.group(1)] = IPerfSingleResult(
-                        transfer = match.group(2),
-                        bandwidth = match.group(3)
-                    )
-                else:
-                    continue
-            # Extract the sum result if it is present (single stream runs don't have one)
-            sum_result = stream_results.pop("SUM", None)
-            # Ensure that the result has the correct number of streams
-            if (
-                len(stream_results) != self.spec.streams or
-                (self.spec.streams > 1 and not sum_result)
-            ):
-                raise PodLogFormatError("pod log is not of the expected format", pod_log)
-            # There should only ever be one completed pod for iperf, so we just override the result
-            self.status.result = IPerfResult(
-                streams = stream_results,
-                # If there is no explicit sum result, use the result from the single stream
-                sum = sum_result or next(iter(stream_results.values()))
-            )
+        # If the pod is in the running phase, record the info
+        if pod_phase == "Running":
+            component = pod["metadata"]["labels"][settings.component_label]
+            setattr(self.status, f"{component}_pod", base.PodInfo.from_pod(pod))
+        # When a pod succeeds, record the pod log
+        # Note that only the client pod ever succeeds as the server is forcibly terminated
+        elif pod_phase == "Succeeded":
+            self.status.client_log = await fetch_pod_log()
 
     def summarise(self):
-        """
-        Update the status of this benchmark with overall results.
-        """
-        # If the result is not set yet, bail
-        if not self.status.result:
-            raise PodResultsIncompleteError("client pod has not recorded a result yet")
+        # If the client log has not yet been recorded, bail
+        if not self.status.client_log:
+            raise PodResultsIncompleteError("client pod has not recorded logs yet")
+        # Compute the result from the client log
+        # Drop the lines from the log until we reach the start of the results
+        lines = it.dropwhile(lambda l: re.match(r"^\[ *ID\]", l) is None, self.status.client_log.splitlines())
+        # Drop the header line
+        _ = next(lines)
+        # Collect stream results until the end of the log
+        stream_results = {}
+        for line in lines:
+            match = re.search(r"^\[ *([a-zA-Z0-9]+)\].*?(\d+) KBytes +(\d+) Kbits/sec", line)
+            if match is not None:
+                stream_results[match.group(1)] = IPerfSingleResult(
+                    transfer = match.group(2),
+                    bandwidth = match.group(3)
+                )
+            else:
+                continue
+        # Extract the sum result if it is present (single stream runs don't have one)
+        sum_result = stream_results.pop("SUM", None)
+        # Ensure that the result has the correct number of streams
+        if (
+            len(stream_results) != self.spec.streams or
+            (self.spec.streams > 1 and not sum_result)
+        ):
+            raise PodLogFormatError("pod log is not of the expected format")
+        # Store the detailed result
+        self.status.result = IPerfResult(
+            streams = stream_results,
+            # If there is no explicit sum result, use the result from the single stream
+            sum = sum_result or next(iter(stream_results.values()))
+        )
         # For the summary result, we use the combined bandwidth
         # However we want to convert it from Kbits/sec to something friendlier
         amount, prefix = format_amount(self.status.result.sum.bandwidth, "K")

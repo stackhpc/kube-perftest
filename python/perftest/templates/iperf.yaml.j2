@@ -63,8 +63,6 @@ spec:
               imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
               args:
                 - --server
-                - --len
-                - "{{ benchmark.spec.buffer_size }}"
               ports:
                 - name: iperf-server
                   containerPort: 5001
@@ -135,8 +133,6 @@ spec:
                 - "{{ benchmark.spec.streams }}"
                 - --format
                 - k
-                - --len
-                - "{{ benchmark.spec.buffer_size }}"
           # Because we generally want to test raw network performance, prevent the pod
           # from running on a node that already has another benchmark component running,
           # for any benchmark

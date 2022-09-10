@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
 
 # We initialise MPI over SSH, so launch SSHD
 mkdir -p /var/run/sshd
