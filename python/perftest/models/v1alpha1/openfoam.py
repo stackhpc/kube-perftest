@@ -101,10 +101,6 @@ class OpenFOAMStatus(base.BenchmarkStatus):
         None,
         description = "The result of the benchmark."
     )
-    master_log: t.Optional[constr(min_length = 1)] = Field(
-        None,
-        description = "The raw pod log of the MPI master pod."
-    )
     master_pod: t.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the MPI master pod."
@@ -175,39 +171,39 @@ class OpenFOAM(
     ):
         pod_phase = pod.get("status", {}).get("phase", "Unknown")
         pod_component = pod["metadata"]["labels"][settings.component_label]
-        if pod_component == "master":
-            if pod_phase == "Running":
+        if pod_phase == "Running":
+            if pod_component == "master":
                 self.status.master_pod = base.PodInfo.from_pod(pod)
-            elif pod_phase == "Succeeded":
-                self.status.master_log = await fetch_pod_log()
-        elif pod_phase == "Running":
-            self.status.worker_pods[pod["metadata"]["name"]] = base.PodInfo.from_pod(pod)
+            else:
+                self.status.worker_pods[pod["metadata"]["name"]] = base.PodInfo.from_pod(pod)
+        elif pod_phase == "Succeeded":
+            pod_log = await fetch_pod_log()
+            # Extract the time info from the pod log
+            wallclock_time = None
+            user_time = None
+            sys_time = None
+            for line in pod_log.splitlines():
+                match = TIME_REGEX.match(line)
+                if match is not None:
+                    if match.group("type") == "real":
+                        wallclock_time = match.group("time")
+                    elif match.group("type") == "user":
+                        user_time = match.group("time")
+                    elif match.group("type") == "sys":
+                        sys_time = match.group("time")
+                    else:
+                        raise PodLogFormatError("this is impossible")
+            if wallclock_time is None or user_time is None or sys_time is None:
+                raise PodLogFormatError("unable to extract timing information")
+            self.status.result = OpenFOAMResult(
+                wallclock_time = wallclock_time,
+                user_time = user_time,
+                sys_time = sys_time
+            )
 
     def summarise(self):
         """
         Update the status of this benchmark with overall results.
         """
-        if not self.status.master_log:
-            raise PodResultsIncompleteError("master pod has not recorded a log yet")
-        # Extract the time info from the pod log
-        wallclock_time = None
-        user_time = None
-        sys_time = None
-        for line in self.status.master_log.splitlines():
-            match = TIME_REGEX.match(line)
-            if match is not None:
-                if match.group("type") == "real":
-                    wallclock_time = match.group("time")
-                elif match.group("type") == "user":
-                    user_time = match.group("time")
-                elif match.group("type") == "sys":
-                    sys_time = match.group("time")
-                else:
-                    raise PodLogFormatError("this is impossible")
-        if wallclock_time is None or user_time is None or sys_time is None:
-            raise PodLogFormatError("unable to extract timing information")
-        self.status.result = OpenFOAMResult(
-            wallclock_time = wallclock_time,
-            user_time = user_time,
-            sys_time = sys_time
-        )
+        if not self.status.result:
+            raise PodResultsIncompleteError("master pod has not recorded a result yet")
