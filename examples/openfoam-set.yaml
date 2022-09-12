@@ -6,8 +6,6 @@ spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1
     kind: OpenFOAM
-    metadata:
-      name: openfoam
     spec:
       imagePullPolicy: Always
       numProcs: 48
