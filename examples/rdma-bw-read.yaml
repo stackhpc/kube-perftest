@@ -1,7 +1,8 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: RDMABandwidth
 metadata:
-  generateName: rdma-bw-read-
+  name: rdma-bw-read
 spec:
   imagePullPolicy: Always
   mode: read
+  rdmaSharedDeviceName: rdma_shared_device_a

@@ -1,0 +1,117 @@
+---
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: {{ benchmark.metadata.name }}
+  labels:
+    {{ settings.kind_label }}: {{ benchmark.kind }}
+    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+    {{ settings.name_label }}: {{ benchmark.metadata.name }}
+spec:
+  maxRetry: 10
+  minAvailable: 2
+  schedulerName: {{ settings.scheduler_name }}
+  queue: {{ settings.queue_name }}
+  priorityClassName: {{ benchmark.status.priority_class_name }}
+  plugins:
+    env: []
+    ssh: []
+    svc: ["--disable-network-policy"]
+  policies:
+    - event: PodEvicted
+      action: RestartJob
+  tasks:
+    - replicas: 1
+      name: server
+      template:
+        metadata:
+          labels:
+            {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+            {{ settings.name_label }}: {{ benchmark.metadata.name }}
+            {{ settings.component_label }}: server
+        spec:
+          priorityClassName: {{ benchmark.status.priority_class_name }}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          containers:
+            - name: server
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              securityContext:
+                allowPrivilegeEscalation: true
+                capabilities:
+                  add: [ "IPC_LOCK" ]
+              args:
+                - ib_{{ benchmark.spec.mode }}_bw
+                - -a
+                - -b
+                - --report_gbits
+              # Ask for the specified RDMA device
+              resources:
+                limits:
+                  rdma/{{ benchmark.spec.rdma_shared_device_name }}: 1
+          # Because we generally want to test raw network performance, prevent the pod
+          # from running on a node that already has another benchmark component running,
+          # for any benchmark
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.kind_label }}
+                        operator: Exists
+                  topologyKey: "kubernetes.io/hostname"
+          # Only run on nodes where RDMA is available
+          nodeSelector:
+            feature.node.kubernetes.io/custom-rdma.available: "true"
+
+    - replicas: 1
+      name: client
+      policies:
+        # When the client terminates successfully, the job is done
+        - event: TaskCompleted
+          action: CompleteJob
+      template:
+        metadata:
+          labels:
+            {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+            {{ settings.name_label }}: {{ benchmark.metadata.name }}
+            {{ settings.component_label }}: client
+        spec:
+          priorityClassName: {{ benchmark.status.priority_class_name }}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          restartPolicy: OnFailure
+          containers:
+            - name: client
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              securityContext:
+                capabilities:
+                  add: [ "IPC_LOCK" ]
+              args:
+                - ib_{{ benchmark.spec.mode }}_bw
+                - -a
+                - -b
+                - --report_gbits
+                - "$(VC_SERVER_HOSTS)"
+              # Ask for the specified RDMA device
+              resources:
+                limits:
+                  rdma/{{ benchmark.spec.rdma_shared_device_name }}: 1
+          # Because we generally want to test raw network performance, prevent the pod
+          # from running on a node that already has another benchmark component running,
+          # for any benchmark
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.kind_label }}
+                        operator: Exists
+                  topologyKey: "kubernetes.io/hostname"
+          # Only run on nodes where RDMA is available
+          nodeSelector:
+            feature.node.kubernetes.io/custom-rdma.available: "true"

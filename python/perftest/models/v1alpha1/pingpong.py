@@ -8,8 +8,6 @@ from kube_custom_resource import schema
 
 from ...config import settings
 from ...errors import PodLogFormatError, PodResultsIncompleteError
-from ...template import Loader
-from ...utils import format_amount
 
 from . import base
 
@@ -198,7 +196,7 @@ class MPIPingPong(
                 if not peak_result or result.bandwidth > peak_result.bandwidth:
                     peak_result = result
             else:
-                break
+                continue
         if results:
             self.status.results = results
         else:
