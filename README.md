@@ -94,8 +94,8 @@ spec:
   problemSize: S
   # The number of MPI processes to use
   numProcs: 16
-  # The number of MPI worker pods to launch
-  numWorkers: 8
+  # The number of MPI pods to launch
+  numNodes: 8
 ```
 
 ## Benchmark set

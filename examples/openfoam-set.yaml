@@ -14,8 +14,8 @@ spec:
     # Produce a matrix of jobs with hostNetwork=false
     product:
       hostNetwork: [false]
-      numWorkers: [2, 4, 8, 12, 16, 24, 48]
+      numNodes: [2, 4, 8, 12, 16, 24, 48]
     # Produce an explcit job for hostNetwork=true
     explicit:
       - hostNetwork: true
-        numWorkers: 2
+        numNodes: 2

@@ -69,9 +69,9 @@ class OpenFOAMSpec(schema.BaseModel):
         1,
         description = "The number of MPI worker processes."
     )
-    num_workers: schema.conint(gt = 0) = Field(
+    num_nodes: schema.conint(gt = 0) = Field(
         1,
-        description = "The number of MPI worker pods."
+        description = "The number of MPI nodes."
     )
 
 
@@ -131,9 +131,9 @@ class OpenFOAM(
             "jsonPath": ".spec.numProcs",
         },
         {
-            "name": "Num Workers",
+            "name": "Num Nodes",
             "type": "integer",
-            "jsonPath": ".spec.numWorkers",
+            "jsonPath": ".spec.numNodes",
         },
         {
             "name": "Status",

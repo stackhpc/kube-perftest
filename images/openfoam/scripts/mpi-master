@@ -25,12 +25,19 @@ for host in $( echo "$VC_MPI_WORKER_HOSTS" | tr ',' ' '); do
   done  
 done
 
+# When using the --host option, the number of slots on the host defaults to 1
+# When using --hostfile, the number of slots on the host default to the number of CPUs
+# We want the hostfile behaviour, but including localhost
+HOSTFILE="$(mktemp)"
+echo "localhost" > $HOSTFILE
+cat /etc/volcano/mpi_worker.host >> $HOSTFILE
+
 exec /usr/bin/time -p \
   mpirun \
     --allow-run-as-root \
     --display-map \
-    --host "localhost,${VC_MPI_WORKER_HOSTS}" \
+    --hostfile $HOSTFILE \
     -np "${NUM_PROCS}" \
-    --bynode \
+    --map-by node \
     --mca btl "${MPIRUN_MCA_BTL:-"self,tcp"}" \
     icoFoam -parallel

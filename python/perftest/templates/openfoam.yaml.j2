@@ -21,7 +21,7 @@ metadata:
     {{ settings.name_label }}: {{ benchmark.metadata.name }}
 spec:
   maxRetry: 10
-  minAvailable: {{ benchmark.spec.num_workers + 1 }}
+  minAvailable: {{ benchmark.spec.num_nodes }}
   queue: {{ settings.queue_name }}
   schedulerName: {{ settings.scheduler_name }}
   priorityClassName: {{ benchmark.status.priority_class_name }}
@@ -74,76 +74,16 @@ spec:
             - name: ssh-config
               configMap:
                 name: {{ benchmark.metadata.name }}-ssh-config
+          {%- if benchmark.spec.host_network %}
           affinity:
             podAntiAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
-                # Avoid pods from other jobs
                 - labelSelector:
                     matchExpressions:
                       - key: {{ settings.kind_label }}
                         operator: Exists
-                      - key: {{ settings.kind_label }}
-                        operator: NotIn
-                        values:
-                          - {{ benchmark.kind }}
                   topologyKey: "kubernetes.io/hostname"
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.namespace_label }}
-                        operator: Exists
-                      - key: {{ settings.namespace_label }}
-                        operator: NotIn
-                        values:
-                          - {{ benchmark.metadata.namespace }}
-                  topologyKey: "kubernetes.io/hostname"
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.name_label }}
-                        operator: Exists
-                      - key: {{ settings.name_label }}
-                        operator: NotIn
-                        values:
-                          - {{ benchmark.metadata.name }}
-                  topologyKey: "kubernetes.io/hostname"
-
-    - name: mpi-worker
-      replicas: {{ benchmark.spec.num_workers }}
-      template:
-        metadata:
-          labels:
-            {{ settings.kind_label }}: {{ benchmark.kind }}
-            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-            {{ settings.name_label }}: {{ benchmark.metadata.name }}
-            {{ settings.component_label }}: worker
-        spec:
-          priorityClassName: {{ benchmark.status.priority_class_name }}
-          {%- if benchmark.spec.host_network %}
-          hostNetwork: true
-          dnsPolicy: ClusterFirstWithHostNet
-          {%- endif %}
-          restartPolicy: OnFailure
-          containers:
-            - name: mpi-worker
-              image: {{ benchmark.spec.image }}
-              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
-              env:
-                - name: SSH_PORT
-                  value: "{{ benchmark.spec.ssh_port }}"
-              ports:
-                - name: ssh
-                  containerPort: {{ benchmark.spec.ssh_port }}
-                  protocol: TCP
-              command:
-                - /usr/local/bin/mpi-worker
-              volumeMounts:
-                - name: ssh-config
-                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
-                  subPath: 01-default-port.conf
-                  readOnly: true
-          volumes:
-            - name: ssh-config
-              configMap:
-                name: {{ benchmark.metadata.name }}-ssh-config
+          {%- else %}
           affinity:
             # In order to prevent topologySpreadConstraints from considering
             # the control-plane nodes, we have to explicitly exclude them here
@@ -185,15 +125,7 @@ spec:
                         values:
                           - {{ benchmark.metadata.name }}
                   topologyKey: "kubernetes.io/hostname"
-                {%- if benchmark.spec.host_network %}
-                # Avoid other workers from our own job if running with host networking
-                - labelSelector:
-                    matchLabels:
-                      {{ settings.component_label }}: worker
-                  topologyKey: "kubernetes.io/hostname"
-                {%- endif %}
-          {%- if not benchmark.spec.host_network %}
-          # If running with CNI networking, spread the workers evenly across eligible nodes
+          # Make sure the pods for the job are evenly spread
           topologySpreadConstraints:
             - maxSkew: 1
               topologyKey: "kubernetes.io/hostname"
@@ -203,5 +135,105 @@ spec:
                   {{ settings.kind_label }}: {{ benchmark.kind }}
                   {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
                   {{ settings.name_label }}: {{ benchmark.metadata.name }}
-                  {{ settings.component_label }}: worker
+          {%- endif %}
+
+    - name: mpi-worker
+      replicas: {{ benchmark.spec.num_nodes - 1 }}
+      template:
+        metadata:
+          labels:
+            {{ settings.kind_label }}: {{ benchmark.kind }}
+            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+            {{ settings.name_label }}: {{ benchmark.metadata.name }}
+            {{ settings.component_label }}: worker
+        spec:
+          priorityClassName: {{ benchmark.status.priority_class_name }}
+          {%- if benchmark.spec.host_network %}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          {%- endif %}
+          restartPolicy: OnFailure
+          containers:
+            - name: mpi-worker
+              image: {{ benchmark.spec.image }}
+              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+              env:
+                - name: SSH_PORT
+                  value: "{{ benchmark.spec.ssh_port }}"
+              ports:
+                - name: ssh
+                  containerPort: {{ benchmark.spec.ssh_port }}
+                  protocol: TCP
+              command:
+                - /usr/local/bin/mpi-worker
+              volumeMounts:
+                - name: ssh-config
+                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
+                  subPath: 01-default-port.conf
+                  readOnly: true
+          volumes:
+            - name: ssh-config
+              configMap:
+                name: {{ benchmark.metadata.name }}-ssh-config
+          {%- if benchmark.spec.host_network %}
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.kind_label }}
+                        operator: Exists
+                  topologyKey: "kubernetes.io/hostname"
+          {%- else %}
+          affinity:
+            # In order to prevent topologySpreadConstraints from considering
+            # the control-plane nodes, we have to explicitly exclude them here
+            # 1.25 adds "nodeTaintsPolicy: Honor" to topologySpreadConstraints as
+            # an alpha-level field that should allow us to remove this
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: node-role.kubernetes.io/control-plane
+                        operator: DoesNotExist
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                # Avoid pods from other jobs
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.kind_label }}
+                        operator: Exists
+                      - key: {{ settings.kind_label }}
+                        operator: NotIn
+                        values:
+                          - {{ benchmark.kind }}
+                  topologyKey: "kubernetes.io/hostname"
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.namespace_label }}
+                        operator: Exists
+                      - key: {{ settings.namespace_label }}
+                        operator: NotIn
+                        values:
+                          - {{ benchmark.metadata.namespace }}
+                  topologyKey: "kubernetes.io/hostname"
+                - labelSelector:
+                    matchExpressions:
+                      - key: {{ settings.name_label }}
+                        operator: Exists
+                      - key: {{ settings.name_label }}
+                        operator: NotIn
+                        values:
+                          - {{ benchmark.metadata.name }}
+                  topologyKey: "kubernetes.io/hostname"
+          # Make sure the pods for the job are evenly spread
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: "kubernetes.io/hostname"
+              whenUnsatisfiable: DoNotSchedule
+              labelSelector:
+                matchLabels:
+                  {{ settings.kind_label }}: {{ benchmark.kind }}
+                  {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+                  {{ settings.name_label }}: {{ benchmark.metadata.name }}
           {%- endif %}
