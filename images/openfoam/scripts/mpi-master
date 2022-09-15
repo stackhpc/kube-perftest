@@ -2,7 +2,7 @@
 
 PROBLEM_SIZE=$1
 ITERATIVE_METHOD=$2
-N_PROC=$3
+NUM_PROCS=$3
 
 # Set openfoam environment
 source /root/.bashrc
@@ -11,7 +11,7 @@ source /root/.bashrc
 ln -sf /opt/hpc/Lid_driven_cavity-3d/${PROBLEM_SIZE} /opt/benchmark
 ln -sf /opt/benchmark/system/fvSolution.${ITERATIVE_METHOD} /opt/benchmark/system/fvSolution
 mv /opt/benchmark/constant/transportProperties /opt/benchmark/constant/physicalProperties
-sed -i "s/^numberOfSubdomains.*/numberOfSubdomains ${N_PROC};/g" /opt/benchmark/system/decomposeParDict
+sed -i "s/^numberOfSubdomains.*/numberOfSubdomains ${NUM_PROCS};/g" /opt/benchmark/system/decomposeParDict
 
 # Stage benchmark datafiles
 cd /opt/benchmark
@@ -25,4 +25,12 @@ for host in $( echo "$VC_MPI_WORKER_HOSTS" | tr ',' ' '); do
   done  
 done
 
-exec /usr/bin/time -p mpirun --allow-run-as-root --hostfile /etc/volcano/mpi_worker.host -np ${N_PROC} icoFoam -parallel
+exec /usr/bin/time -p \
+  mpirun \
+    --allow-run-as-root \
+    --display-map \
+    --host "localhost,${VC_MPI_WORKER_HOSTS}" \
+    -np "${NUM_PROCS}" \
+    --by-node \
+    --mca btl "${MPIRUN_MCA_BTL:-"self,tcp"}" \
+    icoFoam -parallel
