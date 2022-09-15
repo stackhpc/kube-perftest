@@ -23,6 +23,7 @@ rules:
       - iperfs.perftest.stackhpc.com
       - mpipingpongs.perftest.stackhpc.com
       - openfoams.perftest.stackhpc.com
+      - rdmabandwidths.perftest.stackhpc.com
     verbs:
       - update
       - patch
