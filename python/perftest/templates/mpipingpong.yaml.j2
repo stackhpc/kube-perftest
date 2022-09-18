@@ -74,6 +74,12 @@ spec:
                 - --mca
                 - btl
                 - self,tcp
+                - --mca
+                - pml
+                - ^ucx
+                - --mca
+                - osc
+                - ^ucx
                 - mpitests-IMB-MPI1
                 - pingpong
               volumeMounts:

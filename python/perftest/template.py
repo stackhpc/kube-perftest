@@ -1,6 +1,9 @@
+import json
 import typing as t
 
 import jinja2
+
+from pydantic.json import pydantic_encoder
 
 import yaml
 
@@ -28,7 +31,16 @@ class Loader:
         env.filters.update(
             mergeconcat = utils.mergeconcat,
             fromyaml = yaml.safe_load,
-            toyaml = yaml.safe_dump
+            # In order to benefit from correct serialisation of Pydantic models,
+            # we go via JSON to YAML
+            toyaml = lambda obj: yaml.safe_dump(
+                json.loads(
+                    json.dumps(
+                        obj,
+                        default = pydantic_encoder
+                    )
+                )
+            )
         )
         return env
 
