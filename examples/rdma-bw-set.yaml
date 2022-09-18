@@ -1,0 +1,14 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: BenchmarkSet
+metadata:
+  name: rdma-bandwidth
+spec:
+  template:
+    apiVersion: perftest.stackhpc.com/v1alpha1
+    kind: RDMABandwidth
+    spec:
+      imagePullPolicy: Always
+  permutations:
+    product:
+      hostNetwork: [true]
+      mode: [read, write]

@@ -1,0 +1,13 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: BenchmarkSet
+metadata:
+  name: rdma-latency
+spec:
+  template:
+    apiVersion: perftest.stackhpc.com/v1alpha1
+    kind: RDMALatency
+    spec:
+      imagePullPolicy: Always
+  permutations:
+    product:
+      hostNetwork: [true]

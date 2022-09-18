@@ -44,10 +44,8 @@ spec:
                 privileged: true
                 allowPrivilegeEscalation: true
               args:
-                - ib_{{ benchmark.spec.mode }}_bw
+                - ib_read_lat
                 - -a
-                - -b
-                - --report_gbits
               {%- if benchmark.spec.resources %}
               resources:
                 {{ benchmark.spec.resources | toyaml | indent(16) }}
@@ -92,10 +90,8 @@ spec:
                 privileged: true
                 allowPrivilegeEscalation: true
               args:
-                - ib_{{ benchmark.spec.mode }}_bw
+                - ib_read_lat
                 - -a
-                - -b
-                - --report_gbits
                 - "$(VC_SERVER_HOSTS)"
               {%- if benchmark.spec.resources %}
               resources:

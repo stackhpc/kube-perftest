@@ -18,6 +18,20 @@ class ImagePullPolicy(str, schema.Enum):
     NEVER = "Never"
 
 
+class ContainerResources(schema.BaseModel):
+    """
+    Model for specifying container resources.
+    """
+    requests: schema.Dict[str, t.Any] = Field(
+        default_factory = dict,
+        description = "The resource requests for the pod."
+    )
+    limits: schema.Dict[str, t.Any] = Field(
+        default_factory = dict,
+        description = "The resource limits for the pod."
+    )
+
+
 class BenchmarkPhase(str, schema.Enum):
     """
     Enumeration of possible phases for a benchmark.
