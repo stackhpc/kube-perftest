@@ -40,10 +40,6 @@ class IPerfSpec(schema.BaseModel):
         None,
         description = "The resources to use for benchmark containers."
     )
-    server_service: bool = Field(
-        False,
-        description = "Indicates whether to access the server via a service or not."
-    )
     duration: schema.conint(gt = 0) = Field(
         ...,
         description = "The duration of the benchmark."
@@ -123,11 +119,6 @@ class IPerf(
             "jsonPath": ".spec.networkName",
         },
         {
-            "name": "Server Service",
-            "type": "string",
-            "jsonPath": ".spec.serverService",
-        },
-        {
             "name": "Duration",
             "type": "integer",
             "jsonPath": ".spec.duration",
@@ -141,6 +132,11 @@ class IPerf(
             "name": "Status",
             "type": "string",
             "jsonPath": ".status.phase",
+        },
+        {
+            "name": "Started",
+            "type": "date",
+            "jsonPath": ".status.startedAt",
         },
         {
             "name": "Finished",

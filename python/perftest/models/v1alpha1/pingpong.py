@@ -124,6 +124,11 @@ class MPIPingPong(
             "jsonPath": ".status.phase",
         },
         {
+            "name": "Started",
+            "type": "date",
+            "jsonPath": ".status.startedAt",
+        },
+        {
             "name": "Finished",
             "type": "date",
             "jsonPath": ".status.finishedAt",

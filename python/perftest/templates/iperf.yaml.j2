@@ -1,25 +1,3 @@
-{%- if benchmark.spec.server_service %}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ benchmark.metadata.name }}-server
-  labels:
-    {{ settings.kind_label }}: {{ benchmark.kind }}
-    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-    {{ settings.name_label }}: {{ benchmark.metadata.name }}
-    {{ settings.component_label }}: server
-spec:
-  ports:
-    - port: 5001
-      targetPort: iperf-server
-      protocol: TCP
-  selector:
-    {{ settings.kind_label }}: {{ benchmark.kind }}
-    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-    {{ settings.name_label }}: {{ benchmark.metadata.name }}
-    {{ settings.component_label }}: server
-{%- endif %}
 ---
 apiVersion: v1
 kind: Service
@@ -151,11 +129,7 @@ spec:
               imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
               args:
                 - --client
-                {%- if benchmark.spec.server_service %}
-                - "{{ benchmark.metadata.name }}-server"
-                {%- else %}
                 - "{{ benchmark.metadata.name }}-server-0.{{ benchmark.metadata.name }}"
-                {%- endif %}
                 - --time
                 - "{{ benchmark.spec.duration }}"
                 - --parallel

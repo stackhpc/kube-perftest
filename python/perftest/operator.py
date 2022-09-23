@@ -266,32 +266,33 @@ async def handle_benchmark_status_changed(benchmark, **kwargs):
                 succeeded = benchmark.status.phase == api.BenchmarkPhase.COMPLETED
                 benchmark_set.status.completed[benchmark.metadata.name] = succeeded
                 _ = await save_benchmark_status(benchmark_set)
-        return
-    # The only other phase we want to act on is summarising
-    if benchmark.status.phase != api.BenchmarkPhase.SUMMARISING:
-        return
-    # Allow the benchmark to summarise itself and save
-    try:
-        benchmark.summarise()
-    except errors.PodResultsIncompleteError as exc:
-        # Convert this into a temporary error with a short delay, as it is likely
-        # to be resolved quickly
-        raise kopf.TemporaryError(str(exc), delay = 1)
-    else:
-        benchmark = await save_benchmark_status(benchmark)
-    # Once the benchmark summary has been saved successfully, we can delete the managed resources
-    for ref in benchmark.status.managed_resources:
-        ekapi = EK_CLIENT.api(ref.api_version)
-        resource = await ekapi.resource(ref.kind)
-        await resource.delete(ref.name, namespace = benchmark.metadata.namespace)
-    # Make sure to delete the priority class
-    ekapi = EK_CLIENT.api("scheduling.k8s.io/v1")
-    resource = await ekapi.resource("priorityclasses")
-    _ = await resource.delete(benchmark.status.priority_class_name)
-    # Once the resources are deleted, we can mark the benchmark as completed
-    benchmark.status.phase = api.BenchmarkPhase.COMPLETED
-    benchmark.status.managed_resources = []
-    _ = await save_benchmark_status(benchmark)
+    elif benchmark.status.phase == api.BenchmarkPhase.RUNNING:
+        if not benchmark.status.started_at:
+            benchmark.status.started_at = datetime.datetime.now()
+            _ = await save_benchmark_status(benchmark)
+    elif benchmark.status.phase == api.BenchmarkPhase.SUMMARISING:
+        # Allow the benchmark to summarise itself and save
+        try:
+            benchmark.summarise()
+        except errors.PodResultsIncompleteError as exc:
+            # Convert this into a temporary error with a short delay, as it is likely
+            # to be resolved quickly
+            raise kopf.TemporaryError(str(exc), delay = 1)
+        else:
+            benchmark = await save_benchmark_status(benchmark)
+        # Once the benchmark summary has been saved successfully, we can delete the managed resources
+        for ref in benchmark.status.managed_resources:
+            ekapi = EK_CLIENT.api(ref.api_version)
+            resource = await ekapi.resource(ref.kind)
+            await resource.delete(ref.name, namespace = benchmark.metadata.namespace)
+        # Make sure to delete the priority class
+        ekapi = EK_CLIENT.api("scheduling.k8s.io/v1")
+        resource = await ekapi.resource("priorityclasses")
+        _ = await resource.delete(benchmark.status.priority_class_name)
+        # Once the resources are deleted, we can mark the benchmark as completed
+        benchmark.status.phase = api.BenchmarkPhase.COMPLETED
+        benchmark.status.managed_resources = []
+        _ = await save_benchmark_status(benchmark)
 
 
 @benchmark_handler(kopf.on.delete)
@@ -349,6 +350,8 @@ async def handle_job_event(benchmark, body, **kwargs):
     """
     Executes whenever an event occurs for a Volcano job that is part of a benchmark.
     """
+    if type == "DELETED":
+        return
     # If the benchmark is completed, there is nothing to do
     if benchmark.status.phase == api.BenchmarkPhase.COMPLETED:
         return
@@ -422,7 +425,7 @@ async def handle_endpoints_event(type, benchmark, body, name, namespace, **kwarg
             },
             "data": {
                 "hosts": hosts,
-            }
+            },
         },
         namespace = configmap.metadata.namespace
     )
