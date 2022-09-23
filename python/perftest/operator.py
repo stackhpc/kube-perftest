@@ -1,7 +1,6 @@
 import asyncio
 import datetime
 import functools
-import itertools
 import logging
 import math
 import sys
@@ -176,7 +175,7 @@ async def handle_benchmark_created(benchmark, **kwargs):
                     "apiVersion": "scheduling.k8s.io/v1",
                     "kind": "PriorityClass",
                     "metadata": {
-                        "generateName": settings.priority_class_prefix,
+                        "generateName": settings.resource_prefix,
                         "labels": {
                             settings.kind_label: benchmark.kind,
                             settings.namespace_label: benchmark.metadata.namespace,
@@ -331,13 +330,12 @@ def on_benchmark_resource_event(*args, **kwargs):
                             namespace = handler_kwargs["labels"][settings.namespace_label]
                         )
                     )
+                    return await func(benchmark = benchmark, **handler_kwargs)
                 except ApiError as exc:
                     if exc.status_code == 404:
                         return
                     else:
                         raise
-                try:
-                    return await func(benchmark = benchmark, **handler_kwargs)
                 except kopf.TemporaryError as exc:
                     # On kopf temporary errors, go round the loop again after yielding control
                     await asyncio.sleep(exc.delay)
@@ -377,6 +375,57 @@ async def handle_pod_event(type, benchmark, body, name, namespace, status, **kwa
         return await resource.fetch(name, namespace = namespace)
     await benchmark.pod_modified(body, fetch_pod_log)
     _ = await save_benchmark_status(benchmark)
+
+
+@on_benchmark_resource_event("endpoints")
+async def handle_endpoints_event(type, benchmark, body, name, namespace, **kwargs):
+    """
+    Executes whenever an event occurs for an endpoints resource that is part of a benchmark.
+    """
+    # If the benchmark is completed, there is nothing to do
+    if benchmark.status.phase == api.BenchmarkPhase.COMPLETED:
+        return
+    # Next, see if there is a configmap that is tracking the hosts
+    resource = await EK_CLIENT.api("v1").resource("configmaps")
+    configmap = await resource.first(
+        labels = {
+            settings.kind_label: benchmark.kind,
+            settings.namespace_label: benchmark.metadata.namespace,
+            settings.name_label: benchmark.metadata.name,
+            settings.hosts_from_label: PRESENT
+        },
+        namespace = namespace
+    )
+    if not configmap:
+        return
+    # Update the configmap with the new pods and hosts
+    hosts = settings.default_hosts
+    if type != "DELETED":
+        for subset in body.get("subsets", []):
+            for address in subset.get("addresses", []):
+                # If the hostname is present, use it
+                # If not, use the pod name from the targetRef
+                if "hostname" in address:
+                    hostname = address["hostname"]
+                else:
+                    target_ref = address.get("targetRef")
+                    if target_ref and target_ref["kind"] == "Pod":
+                        hostname = target_ref["name"]
+                    else:
+                        continue
+                hosts = f"{hosts}\n{address['ip']} {hostname}.{name}"
+    _ = await resource.patch(
+        configmap.metadata.name,
+        {
+            "metadata": {
+                "resourceVersion": configmap.metadata["resourceVersion"],
+            },
+            "data": {
+                "hosts": hosts,
+            }
+        },
+        namespace = configmap.metadata.namespace
+    )
 
 
 @kopf.on.create(settings.api_group, api.BenchmarkSet._meta.kind)

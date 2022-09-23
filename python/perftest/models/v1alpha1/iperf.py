@@ -29,6 +29,17 @@ class IPerfSpec(schema.BaseModel):
         False,
         description = "Indicates whether to use host networking or not."
     )
+    network_name: t.Optional[constr(min_length = 1)] = Field(
+        None,
+        description = (
+            "The name of a Multus network over which to run the benchmark. "
+            "Only used when host networking is false."
+        )
+    )
+    resources: t.Optional[base.ContainerResources] = Field(
+        None,
+        description = "The resources to use for benchmark containers."
+    )
     server_service: bool = Field(
         False,
         description = "Indicates whether to access the server via a service or not."
@@ -105,6 +116,11 @@ class IPerf(
             "name": "Host Network",
             "type": "boolean",
             "jsonPath": ".spec.hostNetwork",
+        },
+        {
+            "name": "Network Name",
+            "type": "string",
+            "jsonPath": ".spec.networkName",
         },
         {
             "name": "Server Service",
