@@ -1,13 +1,15 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: BenchmarkSet
 metadata:
-  name: mpi-pingpong
+  name: iperf-cni
 spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1
-    kind: MPIPingPong
+    kind: IPerf
     spec:
       imagePullPolicy: Always
+      hostNetwork: false
+      duration: 30
   permutations:
     product:
-      hostNetwork: [true, false]
+      streams: [1, 2, 4, 8, 16, 32, 64, 128]

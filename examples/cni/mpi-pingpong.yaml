@@ -1,0 +1,8 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: MPIPingPong
+metadata:
+  name: mpi-pingpong-cni
+spec:
+  imagePullPolicy: Always
+  hostNetwork: false
+  transport: TCP

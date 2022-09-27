@@ -1,0 +1,256 @@
+{% macro labels(benchmark, component = None) -%}
+{{ settings.kind_label }}: {{ benchmark.kind }}
+{{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
+{{ settings.name_label }}: {{ benchmark.metadata.name }}
+{%- if component %}
+{{ settings.component_label }}: {{ component }}
+{%- endif %}
+{%- endmacro %}
+
+{% macro discovery_rbac(benchmark) -%}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ benchmark.metadata.name }}
+  labels:
+    {{ labels(benchmark) | indent(4) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ benchmark.metadata.name }}-discovery
+  labels:
+    {{ labels(benchmark) | indent(4) }}
+rules:
+  # We just need to be able to read the discovery configmap
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - {{ benchmark.metadata.name }}-hosts
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ benchmark.metadata.name }}-discovery
+  labels:
+    {{ labels(benchmark) | indent(4) }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ benchmark.metadata.name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ benchmark.metadata.name }}-discovery
+{%- endmacro %}
+
+{% macro discovery_service(benchmark) -%}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ benchmark.metadata.name }}
+  labels:
+    {{ labels(benchmark) | indent(4) }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    {{ labels(benchmark) | indent(4) }}
+{%- endmacro %}
+
+{% macro discovery_configmap(benchmark) -%}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ benchmark.metadata.name }}-hosts
+  labels:
+    {{ labels(benchmark) | indent(4) }}
+    {{ settings.hosts_from_label }}: {{ benchmark.metadata.name }}
+data:
+{%- for name, replicas in kwargs.items() %}
+  {{ name }}-hosts: |
+{%- for idx in range(replicas) %}
+    {{ benchmark.metadata.name }}-{{ name }}-{{ idx }}.{{ benchmark.metadata.name }}
+{%- endfor %}
+{%- endfor %}
+  all-hosts: |
+{%- for name, replicas in kwargs.items() %}
+{%- for idx in range(replicas) %}
+    {{ benchmark.metadata.name }}-{{ name }}-{{ idx }}.{{ benchmark.metadata.name }}
+{%- endfor %}
+{%- endfor %}
+  hosts: ""
+{%- endmacro %}
+
+{% macro discovery_hosts_init_container(benchmark) -%}
+name: wait-for-hosts
+image: {{ settings.discovery_container_image }}
+imagePullPolicy: {{ benchmark.spec.image_pull_policy | default(settings.default_image_pull_policy) }}
+env:
+  - name: CONFIG_MAP
+    value: {{ benchmark.metadata.name }}-hosts
+  - name: POD_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+command:
+  - bash
+  - -c
+{%- raw %}
+  - |
+      set -e
+      until [ -n "$(kubectl get configmap ${CONFIG_MAP} -o go-template='{{.data.hosts}}' -n "${POD_NAMESPACE}")" ]; do
+        echo "waiting for hosts file to become available"
+        sleep 1
+      done
+{%- endraw %}
+{%- endmacro %}
+
+{% macro discovery_wait_for_port_init_container(benchmark, port, component = "all") -%}
+name: wait-for-{{ component }}-port-{{ port }}
+image: {{ settings.discovery_container_image }}
+imagePullPolicy: {{ benchmark.spec.image_pull_policy | default(settings.default_image_pull_policy) }}
+command:
+  - bash
+  - -c
+  - |
+      set -e
+      while read host; do
+        if [ -z "$host" ]; then
+          continue
+        fi
+        until nc -z "$host" {{ port }}; do
+          echo "Waiting for port {{ port }} on $host..."
+          sleep 1
+        done
+      done < /etc/kube-perftest/{{ component }}-hosts
+volumeMounts:
+  {{ discovery_volume_mounts(benchmark) | indent(2) }}
+{%- endmacro %}
+
+{% macro discovery_volume(benchmark) -%}
+name: kube-perftest-discovery
+configMap:
+  name: {{ benchmark.metadata.name }}-hosts
+{%- endmacro %}
+
+{% macro discovery_volume_mounts(benchmark) -%}
+- name: kube-perftest-discovery
+  mountPath: /etc/hosts
+  subPath: hosts
+  readOnly: true
+- name: kube-perftest-discovery
+  mountPath: /etc/kube-perftest
+  readOnly: true
+{%- endmacro %}
+
+{% macro job(benchmark) -%}
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: {{ benchmark.metadata.name }}
+  labels:
+    {{ labels(benchmark) | indent(4) }}
+spec:
+  maxRetry: 10
+  minAvailable: 2
+  schedulerName: {{ settings.scheduler_name }}
+  queue: {{ settings.queue_name }}
+  priorityClassName: {{ benchmark.status.priority_class_name }}
+  policies:
+    - event: PodEvicted
+      action: RestartJob
+  {{ caller() | indent(2) }}
+{%- endmacro %}
+
+{% macro distribution_exclusive(benchmark) -%}
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: {{ settings.kind_label }}
+              operator: Exists
+        topologyKey: "kubernetes.io/hostname"
+{%- endmacro %}
+
+{% macro distribution_spread(benchmark, component = None) -%}
+affinity:
+  # In order to prevent topologySpreadConstraints from considering
+  # the control-plane nodes, we have to explicitly exclude them here
+  # 1.25 adds "nodeTaintsPolicy: Honor" to topologySpreadConstraints as
+  # an alpha-level field that should allow us to remove this in the future
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: DoesNotExist
+  # Avoid pods from other jobs
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: {{ settings.kind_label }}
+              operator: Exists
+            - key: {{ settings.kind_label }}
+              operator: NotIn
+              values:
+                - {{ benchmark.kind }}
+        topologyKey: "kubernetes.io/hostname"
+      - labelSelector:
+          matchExpressions:
+            - key: {{ settings.namespace_label }}
+              operator: Exists
+            - key: {{ settings.namespace_label }}
+              operator: NotIn
+              values:
+                - {{ benchmark.metadata.namespace }}
+        topologyKey: "kubernetes.io/hostname"
+      - labelSelector:
+          matchExpressions:
+            - key: {{ settings.name_label }}
+              operator: Exists
+            - key: {{ settings.name_label }}
+              operator: NotIn
+              values:
+                - {{ benchmark.metadata.name }}
+        topologyKey: "kubernetes.io/hostname"
+# Make sure the pods for the benchmark/component are evenly spread
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: "kubernetes.io/hostname"
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        {{ labels(benchmark, component) | indent(8) }}
+{%- endmacro %}
+
+{% macro ssh_configmap(benchmark) -%}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ benchmark.metadata.name }}-ssh-config
+  labels:
+    {{ labels(benchmark) | indent(4) }}
+data:
+  01-default-port.conf: |
+    Port {{ benchmark.spec.ssh_port }}
+{%- endmacro %}
+
+{% macro ssh_volume(benchmark) -%}
+name: ssh-config
+configMap:
+  name: {{ benchmark.metadata.name }}-ssh-config
+{%- endmacro %}
+
+{% macro ssh_volume_mount(benchmark) -%}
+name: ssh-config
+mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
+subPath: 01-default-port.conf
+readOnly: true
+{%- endmacro %}

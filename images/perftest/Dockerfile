@@ -1,6 +1,10 @@
-FROM debian:latest
+#####
+# Dockerfile for the RDMA bandwidth and latency benchmarks
+#####
 
-ARG PERFTEST_VERSION=4.4+0.37-1
-RUN apt-get update && \
-    apt-get install -y "perftest=$PERFTEST_VERSION" && \
-    rm -rf /var/lib/apt/lists/*
+FROM rockylinux:8.6
+
+ARG PERFTEST_VERSION=4.5
+RUN yum install -y "perftest-${PERFTEST_VERSION}" && \
+    yum clean all -y && \
+    rm -rf /var/cache

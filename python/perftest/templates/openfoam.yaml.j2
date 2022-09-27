@@ -1,239 +1,172 @@
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ benchmark.metadata.name }}-ssh-config
-  labels:
-    {{ settings.kind_label }}: {{ benchmark.kind }}
-    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-    {{ settings.name_label }}: {{ benchmark.metadata.name }}
-data:
-  01-default-port.conf: |
-    Port {{ benchmark.spec.ssh_port }}
----
-apiVersion: batch.volcano.sh/v1alpha1
-kind: Job
-metadata:
-  name: {{ benchmark.metadata.name }}
-  labels:
-    {{ settings.kind_label }}: {{ benchmark.kind }}
-    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-    {{ settings.name_label }}: {{ benchmark.metadata.name }}
-spec:
-  maxRetry: 10
-  minAvailable: {{ benchmark.spec.num_nodes }}
-  queue: {{ settings.queue_name }}
-  schedulerName: {{ settings.scheduler_name }}
-  priorityClassName: {{ benchmark.status.priority_class_name }}
-  plugins:
-    env: []
-    ssh: []
-    svc:
-     - --disable-network-policy
-  policies:
-    - event: PodEvicted
-      action: RestartJob
-  tasks:
-    - name: mpi-master
-      replicas: 1
-      policies:
-        - event: TaskCompleted
-          action: CompleteJob
-      template:
-        metadata:
-          labels:
-            {{ settings.kind_label }}: {{ benchmark.kind }}
-            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-            {{ settings.name_label }}: {{ benchmark.metadata.name }}
-            {{ settings.component_label }}: master
-        spec:
-          priorityClassName: {{ benchmark.status.priority_class_name }}
-          {%- if benchmark.spec.host_network %}
-          hostNetwork: true
-          dnsPolicy: ClusterFirstWithHostNet
-          {%- endif %}
-          restartPolicy: OnFailure
-          containers:
-            - name: mpi-master
-              image: {{ benchmark.spec.image }}
-              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
-              env:
-                - name: SSH_PORT
-                  value: "{{ benchmark.spec.ssh_port }}"
-              command:
-                - /usr/local/bin/mpi-master
-                - {{ benchmark.spec.problem_size }}
-                - {{ benchmark.spec.iterative_method }}
-                - "{{ benchmark.spec.num_procs }}"
-              volumeMounts:
-                - name: ssh-config
-                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
-                  subPath: 01-default-port.conf
-                  readOnly: true         
-          volumes:
-            - name: ssh-config
-              configMap:
-                name: {{ benchmark.metadata.name }}-ssh-config
-          {%- if benchmark.spec.host_network %}
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.kind_label }}
-                        operator: Exists
-                  topologyKey: "kubernetes.io/hostname"
-          {%- else %}
-          affinity:
-            # In order to prevent topologySpreadConstraints from considering
-            # the control-plane nodes, we have to explicitly exclude them here
-            # 1.25 adds "nodeTaintsPolicy: Honor" to topologySpreadConstraints as
-            # an alpha-level field that should allow us to remove this
-            nodeAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                nodeSelectorTerms:
-                  - matchExpressions:
-                      - key: node-role.kubernetes.io/control-plane
-                        operator: DoesNotExist
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                # Avoid pods from other jobs
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.kind_label }}
-                        operator: Exists
-                      - key: {{ settings.kind_label }}
-                        operator: NotIn
-                        values:
-                          - {{ benchmark.kind }}
-                  topologyKey: "kubernetes.io/hostname"
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.namespace_label }}
-                        operator: Exists
-                      - key: {{ settings.namespace_label }}
-                        operator: NotIn
-                        values:
-                          - {{ benchmark.metadata.namespace }}
-                  topologyKey: "kubernetes.io/hostname"
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.name_label }}
-                        operator: Exists
-                      - key: {{ settings.name_label }}
-                        operator: NotIn
-                        values:
-                          - {{ benchmark.metadata.name }}
-                  topologyKey: "kubernetes.io/hostname"
-          # Make sure the pods for the job are evenly spread
-          topologySpreadConstraints:
-            - maxSkew: 1
-              topologyKey: "kubernetes.io/hostname"
-              whenUnsatisfiable: DoNotSchedule
-              labelSelector:
-                matchLabels:
-                  {{ settings.kind_label }}: {{ benchmark.kind }}
-                  {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-                  {{ settings.name_label }}: {{ benchmark.metadata.name }}
-          {%- endif %}
+{% import '_macros.j2' as macros %}
 
-    - name: mpi-worker
-      replicas: {{ benchmark.spec.num_nodes - 1 }}
-      template:
-        metadata:
-          labels:
-            {{ settings.kind_label }}: {{ benchmark.kind }}
-            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-            {{ settings.name_label }}: {{ benchmark.metadata.name }}
-            {{ settings.component_label }}: worker
-        spec:
-          priorityClassName: {{ benchmark.status.priority_class_name }}
-          {%- if benchmark.spec.host_network %}
-          hostNetwork: true
-          dnsPolicy: ClusterFirstWithHostNet
-          {%- endif %}
-          restartPolicy: OnFailure
-          containers:
-            - name: mpi-worker
-              image: {{ benchmark.spec.image }}
-              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
-              env:
-                - name: SSH_PORT
-                  value: "{{ benchmark.spec.ssh_port }}"
-              ports:
-                - name: ssh
-                  containerPort: {{ benchmark.spec.ssh_port }}
-                  protocol: TCP
-              command:
-                - /usr/local/bin/mpi-worker
-              volumeMounts:
-                - name: ssh-config
-                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
-                  subPath: 01-default-port.conf
-                  readOnly: true
-          volumes:
-            - name: ssh-config
-              configMap:
-                name: {{ benchmark.metadata.name }}-ssh-config
-          {%- if benchmark.spec.host_network %}
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.kind_label }}
-                        operator: Exists
-                  topologyKey: "kubernetes.io/hostname"
-          {%- else %}
-          affinity:
-            # In order to prevent topologySpreadConstraints from considering
-            # the control-plane nodes, we have to explicitly exclude them here
-            # 1.25 adds "nodeTaintsPolicy: Honor" to topologySpreadConstraints as
-            # an alpha-level field that should allow us to remove this
-            nodeAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                nodeSelectorTerms:
-                  - matchExpressions:
-                      - key: node-role.kubernetes.io/control-plane
-                        operator: DoesNotExist
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                # Avoid pods from other jobs
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.kind_label }}
-                        operator: Exists
-                      - key: {{ settings.kind_label }}
-                        operator: NotIn
-                        values:
-                          - {{ benchmark.kind }}
-                  topologyKey: "kubernetes.io/hostname"
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.namespace_label }}
-                        operator: Exists
-                      - key: {{ settings.namespace_label }}
-                        operator: NotIn
-                        values:
-                          - {{ benchmark.metadata.namespace }}
-                  topologyKey: "kubernetes.io/hostname"
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.name_label }}
-                        operator: Exists
-                      - key: {{ settings.name_label }}
-                        operator: NotIn
-                        values:
-                          - {{ benchmark.metadata.name }}
-                  topologyKey: "kubernetes.io/hostname"
-          # Make sure the pods for the job are evenly spread
-          topologySpreadConstraints:
-            - maxSkew: 1
-              topologyKey: "kubernetes.io/hostname"
-              whenUnsatisfiable: DoNotSchedule
-              labelSelector:
-                matchLabels:
-                  {{ settings.kind_label }}: {{ benchmark.kind }}
-                  {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-                  {{ settings.name_label }}: {{ benchmark.metadata.name }}
-          {%- endif %}
+{{ macros.discovery_rbac(benchmark) }}
+---
+{{ macros.discovery_service(benchmark) }}
+---
+{{ macros.discovery_configmap(benchmark, master = 1, worker = benchmark.spec.num_nodes) }}
+---
+{{ macros.ssh_configmap(benchmark) }}
+---
+{% call macros.job(benchmark) -%}
+plugins:
+  env: []
+  ssh: []
+tasks:
+  - name: master
+    replicas: 1
+    policies:
+      # When the master terminates successfully, the job is done
+      - event: TaskCompleted
+        action: CompleteJob
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark, "master") | indent(10) }}
+        {%- if not benchmark.spec.host_network and benchmark.spec.network_name %}
+        annotations:
+          v1.multus-cni.io/default-network: {{ benchmark.spec.network_name }}
+        {%- endif %}
+      spec:
+        priorityClassName: {{ benchmark.status.priority_class_name }}
+        serviceAccountName: {{ benchmark.metadata.name }}
+        {%- if benchmark.spec.host_network %}
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        {%- endif %}
+        restartPolicy: OnFailure
+        initContainers:
+          - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+          - name: openfoam-init
+            image: {{ benchmark.spec.image }}
+            imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+            command:
+              - openfoam-init
+              - {{ benchmark.spec.problem_size }}
+              - {{ benchmark.spec.iterative_method }}
+              - "{{ benchmark.spec.num_procs }}"
+              - /etc/kube-perftest/worker-hosts
+            volumeMounts:
+              {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
+              - {{ macros.ssh_volume_mount(benchmark) | indent(16) }}
+              - name: opt-benchmark
+                mountPath: /opt/benchmark
+        containers:
+          - name: master
+            image: {{ benchmark.spec.image }}
+            imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+            {%- if benchmark.spec.transport == "RDMA" %}
+            env:
+              - name: UCX_TLS
+                value: self,rc_x
+            {%- endif %}
+            args:
+              - mpi-master
+              - --allow-run-as-root
+              - --display-map
+              - --hostfile
+              - /etc/kube-perftest/worker-hosts
+              - -np
+              - "{{ benchmark.spec.num_procs }}"
+              - --map-by
+              - node
+              - -x
+              - PATH
+              {%- if benchmark.spec.transport == "TCP" %}
+              - --mca
+              - btl
+              - self,tcp
+              - --mca
+              - pml
+              - ^ucx
+              - --mca
+              - osc
+              - ^ucx
+              {%- else %}
+              - -x
+              - UCX_TLS
+              - --mca
+              - btl
+              - ^openib
+              - --mca
+              - pml
+              - ucx
+              - --mca
+              - osc
+              - ucx
+              {%- endif %}
+              - foamExec
+              - icoFoam
+              - -parallel
+            {%- if benchmark.spec.resources %}
+            resources:
+              {{ benchmark.spec.resources | toyaml | indent(14) }}
+            {%- endif %}
+            volumeMounts:
+              {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
+              - {{ macros.ssh_volume_mount(benchmark) | indent(16) }}
+              - name: opt-benchmark
+                mountPath: /opt/benchmark
+            workingDir: /opt/benchmark
+        volumes:
+          - {{ macros.discovery_volume(benchmark) | indent(12) }}
+          - {{ macros.ssh_volume(benchmark) | indent(12) }}
+          - name: opt-benchmark
+            emptyDir: {}
+        # The master should avoid pods from other benchmarks
+        {{ macros.distribution_spread(benchmark, "master") | indent(8) }}
+
+  - name: worker
+    replicas: {{ benchmark.spec.num_nodes }}
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark, "worker") | indent(10) }}
+        {%- if not benchmark.spec.host_network and benchmark.spec.network_name %}
+        annotations:
+          v1.multus-cni.io/default-network: {{ benchmark.spec.network_name }}
+        {%- endif %}
+      spec:
+        priorityClassName: {{ benchmark.status.priority_class_name }}
+        serviceAccountName: {{ benchmark.metadata.name }}
+        {%- if benchmark.spec.host_network %}
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        {%- endif %}
+        restartPolicy: OnFailure
+        initContainers:
+          - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+        containers:
+          - name: worker
+            image: {{ benchmark.spec.image }}
+            imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+            securityContext:
+              capabilities:
+                add: [ "IPC_LOCK" ]
+            env:
+              - name: SSH_PORT
+                value: "{{ benchmark.spec.ssh_port }}"
+            ports:
+              - name: ssh
+                containerPort: {{ benchmark.spec.ssh_port }}
+                protocol: TCP
+            args:
+              - mpi-worker
+            {%- if benchmark.spec.resources %}
+            resources:
+              {{ benchmark.spec.resources | toyaml | indent(14) }}
+            {%- endif %}
+            volumeMounts:
+              {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
+              - {{ macros.ssh_volume_mount(benchmark) | indent(16) }}
+              - name: opt-benchmark
+                mountPath: /opt/benchmark
+        volumes:
+          - {{ macros.discovery_volume(benchmark) | indent(12) }}
+          - {{ macros.ssh_volume(benchmark) | indent(12) }}
+          - name: opt-benchmark
+            emptyDir: {}
+        # The workers should avoid pods from other benchmarks and each other
+        # Max skew of 1 with two workers ensures they will be on separate hosts
+        {{ macros.distribution_spread(benchmark, "worker") | indent(8) }}
+{%- endcall %}

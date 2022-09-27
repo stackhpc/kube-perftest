@@ -14,6 +14,14 @@ from . import base
 TIME_REGEX = re.compile(r"^(?P<type>real|user|sys)\s+(?P<time>\d+\.\d+)")
 
 
+class MPITransport(str, schema.Enum):
+    """
+    Enumeration of supported MPI transports.
+    """
+    TCP = "TCP"
+    RDMA = "RDMA"
+
+
 class OpenFOAMProblemSize(str, schema.Enum):
     """
     Enumeration of possible OpenFOAM problem sizes.
@@ -56,6 +64,21 @@ class OpenFOAMSpec(schema.BaseModel):
     host_network: bool = Field(
         False,
         description = "Indicates whether to use host networking or not."
+    )
+    network_name: t.Optional[constr(min_length = 1)] = Field(
+        None,
+        description = (
+            "The name of a Multus network over which to run the benchmark. "
+            "Only used when host networking is false."
+        )
+    )
+    resources: t.Optional[base.ContainerResources] = Field(
+        None,
+        description = "The resources to use for benchmark containers."
+    )
+    transport: MPITransport = Field(
+        MPITransport.TCP,
+        description = "The transport to use for the benchmark."
     )
     problem_size: OpenFOAMProblemSize = Field(
         OpenFOAMProblemSize.SMALL,
@@ -119,6 +142,16 @@ class OpenFOAM(
             "name": "Host Network",
             "type": "boolean",
             "jsonPath": ".spec.hostNetwork",
+        },
+        {
+            "name": "Network Name",
+            "type": "string",
+            "jsonPath": ".spec.networkName",
+        },
+        {
+            "name": "Transport",
+            "type": "string",
+            "jsonPath": ".spec.transport",
         },
         {
             "name": "Problem Size",

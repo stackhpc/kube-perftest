@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import functools
+import itertools
 import logging
 import math
 import sys
@@ -259,13 +260,12 @@ async def handle_benchmark_status_changed(benchmark, **kwargs):
                         namespace = benchmark.metadata.namespace
                     )
                 )
-            except ApiError as exc:
-                if exc.status_code != 404:
-                    raise
-            else:
                 succeeded = benchmark.status.phase == api.BenchmarkPhase.COMPLETED
                 benchmark_set.status.completed[benchmark.metadata.name] = succeeded
                 _ = await save_benchmark_status(benchmark_set)
+            except ApiError as exc:
+                if exc.status_code != 404:
+                    raise
     elif benchmark.status.phase == api.BenchmarkPhase.RUNNING:
         if not benchmark.status.started_at:
             benchmark.status.started_at = datetime.datetime.now()
@@ -401,11 +401,19 @@ async def handle_endpoints_event(type, benchmark, body, name, namespace, **kwarg
     )
     if not configmap:
         return
-    # Update the configmap with the new pods and hosts
-    hosts = settings.default_hosts
+    # Get the list of expected pod names from the configmap
+    expected = { l.strip() for l in configmap.data.get("all-hosts", "").splitlines() }
+    # Collect up the IPs from the endpoints
+    # We include addresses and not-ready addresses as we use an init container
+    # to wait for the hosts to be ready which stops the pod moving into addresses
+    ips = {}
     if type != "DELETED":
         for subset in body.get("subsets", []):
-            for address in subset.get("addresses", []):
+            addresses = itertools.chain(
+                subset.get("addresses", []),
+                subset.get("notReadyAddresses", [])
+            )
+            for address in addresses:
                 # If the hostname is present, use it
                 # If not, use the pod name from the targetRef
                 if "hostname" in address:
@@ -416,7 +424,7 @@ async def handle_endpoints_event(type, benchmark, body, name, namespace, **kwarg
                         hostname = target_ref["name"]
                     else:
                         continue
-                hosts = f"{hosts}\n{address['ip']} {hostname}.{name}"
+                ips[f"{hostname}.{name}"] = f"{address['ip']}  {hostname}.{name}  {hostname}"
     _ = await resource.patch(
         configmap.metadata.name,
         {
@@ -424,7 +432,13 @@ async def handle_endpoints_event(type, benchmark, body, name, namespace, **kwarg
                 "resourceVersion": configmap.metadata["resourceVersion"],
             },
             "data": {
-                "hosts": hosts,
+                # If we have an IP for each pod, write the hosts file
+                # If not, write an empty hosts file
+                "hosts": (
+                    "\n".join([settings.default_hosts] + list(ips.values()))
+                    if not expected.difference(ips.keys())
+                    else ""
+                ),
             },
         },
         namespace = configmap.metadata.namespace

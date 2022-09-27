@@ -5,14 +5,11 @@
 
 FROM rockylinux:8.6
 
-# We need SSHD to do MPI initialisation over SSH
-RUN yum install -y openssh-clients openssh-server && \
-    yum clean all -y && \
-    rm -rf /var/cache
-
-# Install the OpenMPI tests module
 ARG MPITESTS_VERSION=5.8
-RUN yum install -y "mpitests-openmpi-${MPITESTS_VERSION}" && \
+RUN yum install -y \
+      openssh-clients openssh-server \
+      rdma-core ucx-ib ucx-rdmacm \
+      "mpitests-openmpi-${MPITESTS_VERSION}" && \
     yum clean all -y && \
     rm -rf /var/cache
 

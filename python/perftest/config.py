@@ -50,6 +50,8 @@ class Configuration(BaseConfiguration):
     default_image_tag: constr(min_length = 1) = "latest"
     #: The image pull policy to use for benchmarks
     default_image_pull_policy: ImagePullPolicy = ImagePullPolicy.IF_NOT_PRESENT
+    #: The default image to use for discovery init containers
+    discovery_container_image: constr(min_length = 1) = None
 
     #: The name of the scheduler to use
     #:   Pod preemption, especially when combined with (anti-)affinity appears to be at
@@ -81,6 +83,10 @@ class Configuration(BaseConfiguration):
     initial_priority: int = -1
     #: The prefix to use for generating resource names
     resource_prefix: constr(min_length = 1) = "kube-perftest-"
+
+    @validator("discovery_container_image", pre = True, always = True)
+    def default_discovery_container_image(cls, v, *, values, **kwargs):
+        return v or f"{values['default_image_prefix']}discovery:{values['default_image_tag']}"
 
     @validator("kind_label", pre = True, always = True)
     def default_kind_label(cls, v, *, values, **kwargs):

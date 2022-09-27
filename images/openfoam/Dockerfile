@@ -1,25 +1,26 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive \
     apt-get install -y \
-    ssh \
-    wget \
-    software-properties-common \
-    git \
-    time \
-    rsync && \
+      curl \
+      git \
+      openmpi-bin \
+      openssh-client \
+      openssh-server \
+      rsync \
+      software-properties-common \
+      time \
+      ucx-utils && \
     rm -rf /var/lib/apt/lists/*
 
-RUN wget -O /etc/apt/trusted.gpg.d/openfoam.asc https://dl.openfoam.org/gpg.key
-RUN add-apt-repository http://dl.openfoam.org/ubuntu
-
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y openfoam10 openmpi-bin && \
+ARG OPENFOAM_VERSION=20220831
+RUN curl -fsSLo /etc/apt/trusted.gpg.d/openfoam.asc https://dl.openfoam.org/gpg.key && \
+    add-apt-repository http://dl.openfoam.org/ubuntu && \
+    apt-get update && \
+    apt-get install -y "openfoam10=$OPENFOAM_VERSION" && \
     rm -rf /var/lib/apt/lists/*
-
-RUN ln -sf /opt/openfoam10/etc/bashrc /root/.bashrc
 
 RUN git clone https://develop.openfoam.com/committees/hpc.git /opt/hpc
 

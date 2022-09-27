@@ -1,154 +1,151 @@
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ benchmark.metadata.name }}-ssh-config
-  labels:
-    {{ settings.kind_label }}: {{ benchmark.kind }}
-    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-    {{ settings.name_label }}: {{ benchmark.metadata.name }}
-data:
-  01-default-port.conf: |
-    Port {{ benchmark.spec.ssh_port }}
----
-apiVersion: batch.volcano.sh/v1alpha1
-kind: Job
-metadata:
-  name: {{ benchmark.metadata.name }}
-  labels:
-    {{ settings.kind_label }}: {{ benchmark.kind }}
-    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-    {{ settings.name_label }}: {{ benchmark.metadata.name }}
-spec:
-  maxRetry: 10
-  minAvailable: 2
-  schedulerName: {{ settings.scheduler_name }}
-  queue: {{ settings.queue_name }}
-  priorityClassName: {{ benchmark.status.priority_class_name }}
-  plugins:
-    env: []
-    ssh: []
-    svc:
-      - --disable-network-policy
-  policies:
-    - event: PodEvicted
-      action: RestartJob
-  tasks:
-    - name: mpi-master
-      replicas: 1
-      policies:
-        # When the master terminates successfully, the job is done
-        - event: TaskCompleted
-          action: CompleteJob
-      template:
-        metadata:
-          labels:
-            {{ settings.kind_label }}: {{ benchmark.kind }}
-            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-            {{ settings.name_label }}: {{ benchmark.metadata.name }}
-            {{ settings.component_label }}: master
-        spec:
-          priorityClassName: {{ benchmark.status.priority_class_name }}
-          {%- if benchmark.spec.host_network %}
-          hostNetwork: true
-          dnsPolicy: ClusterFirstWithHostNet
-          {%- endif %}
-          restartPolicy: OnFailure
-          containers:
-            - name: mpi-master
-              image: {{ benchmark.spec.image }}
-              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
-              env:
-                - name: SSH_PORT
-                  value: "{{ benchmark.spec.ssh_port }}"
-              command:
-                - mpi-master
-                - --allow-run-as-root
-                - --display-map
-                - --host
-                - "localhost,$(VC_MPI_WORKER_HOSTS)"
-                - -np
-                - "2"
-                - --map-by
-                - ppr:1:node
-                - --mca
-                - btl
-                - self,tcp
-                - --mca
-                - pml
-                - ^ucx
-                - --mca
-                - osc
-                - ^ucx
-                - mpitests-IMB-MPI1
-                - pingpong
-              volumeMounts:
-                - name: ssh-config
-                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
-                  subPath: 01-default-port.conf
-                  readOnly: true
-          volumes:
-            - name: ssh-config
-              configMap:
-                name: {{ benchmark.metadata.name }}-ssh-config
-          # Because we generally want to test raw network performance, prevent the pod
-          # from running on a node that already has another benchmark component running,
-          # for any benchmark
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.kind_label }}
-                        operator: Exists
-                  topologyKey: "kubernetes.io/hostname"
+{% import '_macros.j2' as macros %}
 
-    - name: mpi-worker
-      replicas: 1
-      template:
-        metadata:
-          labels:
-            {{ settings.kind_label }}: {{ benchmark.kind }}
-            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-            {{ settings.name_label }}: {{ benchmark.metadata.name }}
-            {{ settings.component_label }}: worker
-        spec:
-          priorityClassName: {{ benchmark.status.priority_class_name }}
-          {%- if benchmark.spec.host_network %}
-          hostNetwork: true
-          dnsPolicy: ClusterFirstWithHostNet
-          {%- endif %}
-          restartPolicy: OnFailure
-          containers:
-            - name: mpi-worker
-              image: {{ benchmark.spec.image }}
-              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
-              env:
-                - name: SSH_PORT
-                  value: "{{ benchmark.spec.ssh_port }}"
-              ports:
-                - name: ssh
-                  containerPort: {{ benchmark.spec.ssh_port }}
-                  protocol: TCP
-              command:
-                - mpi-worker
-              volumeMounts:
-                - name: ssh-config
-                  mountPath: /etc/ssh/ssh_config.d/01-default-port.conf
-                  subPath: 01-default-port.conf
-                  readOnly: true
-          volumes:
-            - name: ssh-config
-              configMap:
-                name: {{ benchmark.metadata.name }}-ssh-config
-          # Because we generally want to test raw network performance, prevent the pod
-          # from running on a node that already has another benchmark component running,
-          # for any benchmark
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.kind_label }}
-                        operator: Exists
-                  topologyKey: "kubernetes.io/hostname"
+{{ macros.discovery_rbac(benchmark) }}
+---
+{{ macros.discovery_service(benchmark) }}
+---
+{{ macros.discovery_configmap(benchmark, master = 1, worker = 2) }}
+---
+{{ macros.ssh_configmap(benchmark) }}
+---
+{% call macros.job(benchmark) -%}
+plugins:
+  env: []
+  ssh: []
+tasks:
+  - name: master
+    replicas: 1
+    policies:
+      # When the master terminates successfully, the job is done
+      - event: TaskCompleted
+        action: CompleteJob
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark, "master") | indent(10) }}
+        {%- if not benchmark.spec.host_network and benchmark.spec.network_name %}
+        annotations:
+          v1.multus-cni.io/default-network: {{ benchmark.spec.network_name }}
+        {%- endif %}
+      spec:
+        priorityClassName: {{ benchmark.status.priority_class_name }}
+        serviceAccountName: {{ benchmark.metadata.name }}
+        {%- if benchmark.spec.host_network %}
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        {%- endif %}
+        restartPolicy: OnFailure
+        initContainers:
+          - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+          - {{ macros.discovery_wait_for_port_init_container(benchmark, benchmark.spec.ssh_port, "worker") | indent(12) }}
+        containers:
+          - name: master
+            image: {{ benchmark.spec.image }}
+            imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+            {%- if benchmark.spec.transport == "RDMA" %}
+            env:
+              - name: UCX_TLS
+                value: self,rc_x
+            {%- endif %}
+            args:
+              - mpi-master
+              - --allow-run-as-root
+              - --display-map
+              - --hostfile
+              - /etc/kube-perftest/worker-hosts
+              - -np
+              - "2"
+              - --map-by
+              - ppr:1:node
+              {%- if benchmark.spec.transport == "TCP" %}
+              - --mca
+              - btl
+              - self,tcp
+              - --mca
+              - pml
+              - ^ucx
+              - --mca
+              - osc
+              - ^ucx
+              {%- else %}
+              - -x
+              - UCX_TLS
+              - --mca
+              - btl
+              - ^openib
+              - --mca
+              - pml
+              - ucx
+              - --mca
+              - osc
+              - ucx
+              {%- endif %}
+              - mpitests-IMB-MPI1
+              - pingpong
+            {%- if benchmark.spec.resources %}
+            resources:
+              {{ benchmark.spec.resources | toyaml | indent(14) }}
+            {%- endif %}
+            volumeMounts:
+              {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
+              - {{ macros.ssh_volume_mount(benchmark) | indent(16) }}
+        volumes:
+          - {{ macros.discovery_volume(benchmark) | indent(12) }}
+          - {{ macros.ssh_volume(benchmark) | indent(12) }}
+        # The master should avoid pods from other benchmarks
+        {{ macros.distribution_spread(benchmark, "master") | indent(8) }}
+
+  - name: worker
+    replicas: 2
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark, "worker") | indent(10) }}
+        {%- if not benchmark.spec.host_network and benchmark.spec.network_name %}
+        annotations:
+          v1.multus-cni.io/default-network: {{ benchmark.spec.network_name }}
+        {%- endif %}
+      spec:
+        priorityClassName: {{ benchmark.status.priority_class_name }}
+        serviceAccountName: {{ benchmark.metadata.name }}
+        {%- if benchmark.spec.host_network %}
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        {%- endif %}
+        restartPolicy: OnFailure
+        initContainers:
+          - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+        containers:
+          - name: worker
+            image: {{ benchmark.spec.image }}
+            imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+            securityContext:
+              {%- if benchmark.spec.host_network %}
+              privileged: true
+              allowPrivilegeEscalation: true
+              {%- endif %}
+              capabilities:
+                add: [ "IPC_LOCK" ]
+            env:
+              - name: SSH_PORT
+                value: "{{ benchmark.spec.ssh_port }}"
+            ports:
+              - name: ssh
+                containerPort: {{ benchmark.spec.ssh_port }}
+                protocol: TCP
+            args:
+              - mpi-worker
+            {%- if benchmark.spec.resources %}
+            resources:
+              {{ benchmark.spec.resources | toyaml | indent(14) }}
+            {%- endif %}
+            volumeMounts:
+              {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
+              - {{ macros.ssh_volume_mount(benchmark) | indent(16) }}
+        volumes:
+          - {{ macros.discovery_volume(benchmark) | indent(12) }}
+          - {{ macros.ssh_volume(benchmark) | indent(12) }}
+        # The workers should avoid pods from other benchmarks and each other
+        # Max skew of 1 with two workers ensures they will be on separate hosts
+        {{ macros.distribution_spread(benchmark, "worker") | indent(8) }}
+{%- endcall %}
