@@ -15,6 +15,12 @@ class ImagePullPolicy(str, enum.Enum):
     NEVER = "Never"
 
 
+DEFAULT_HOSTS = """
+127.0.0.1  localhost
+::1        localhost ip6-localhost ip6-loopback
+"""
+
+
 class Configuration(BaseConfiguration):
     """
     Top-level configuration model.
@@ -44,6 +50,8 @@ class Configuration(BaseConfiguration):
     default_image_tag: constr(min_length = 1) = "latest"
     #: The image pull policy to use for benchmarks
     default_image_pull_policy: ImagePullPolicy = ImagePullPolicy.IF_NOT_PRESENT
+    #: The default image to use for discovery init containers
+    discovery_container_image: constr(min_length = 1) = None
 
     #: The name of the scheduler to use
     #:   Pod preemption, especially when combined with (anti-)affinity appears to be at
@@ -65,11 +73,20 @@ class Configuration(BaseConfiguration):
     #: Label specifying the component of the benchmark that a resource belongs to
     component_label: constr(min_length = 1) = None
 
+    #: Label indicating that a configmap should be populated with hosts from a service
+    hosts_from_label: constr(min_length = 1) = None
+    #: The default hosts for the generated hosts files
+    default_hosts: constr(min_length = 1) = DEFAULT_HOSTS.strip()
+
     #: The default priority when there are no existing priority classes
     #: By default, we use negative priorities so that jobs will not preempt other pods
     initial_priority: int = -1
-    #: The prefix to use for priority class names
-    priority_class_prefix: constr(min_length = 1) = "kube-perftest-"
+    #: The prefix to use for generating resource names
+    resource_prefix: constr(min_length = 1) = "kube-perftest-"
+
+    @validator("discovery_container_image", pre = True, always = True)
+    def default_discovery_container_image(cls, v, *, values, **kwargs):
+        return v or f"{values['default_image_prefix']}discovery:{values['default_image_tag']}"
 
     @validator("kind_label", pre = True, always = True)
     def default_kind_label(cls, v, *, values, **kwargs):
@@ -86,6 +103,10 @@ class Configuration(BaseConfiguration):
     @validator("component_label", pre = True, always = True)
     def default_component_label(cls, v, *, values, **kwargs):
         return v or f"{values['api_group']}/benchmark-component"
+
+    @validator("hosts_from_label", pre = True, always = True)
+    def default_hosts_from_label(cls, v, *, values, **kwargs):
+        return v or f"{values['api_group']}/hosts-from"
 
 
 settings = Configuration()

@@ -1,0 +1,15 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: BenchmarkSet
+metadata:
+  name: iperf-hostnet
+spec:
+  template:
+    apiVersion: perftest.stackhpc.com/v1alpha1
+    kind: IPerf
+    spec:
+      imagePullPolicy: Always
+      hostNetwork: true
+      duration: 30
+  permutations:
+    product:
+      streams: [1, 2, 4, 8, 16, 32, 64, 128]

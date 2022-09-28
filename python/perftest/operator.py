@@ -176,7 +176,7 @@ async def handle_benchmark_created(benchmark, **kwargs):
                     "apiVersion": "scheduling.k8s.io/v1",
                     "kind": "PriorityClass",
                     "metadata": {
-                        "generateName": settings.priority_class_prefix,
+                        "generateName": settings.resource_prefix,
                         "labels": {
                             settings.kind_label: benchmark.kind,
                             settings.namespace_label: benchmark.metadata.namespace,
@@ -260,39 +260,39 @@ async def handle_benchmark_status_changed(benchmark, **kwargs):
                         namespace = benchmark.metadata.namespace
                     )
                 )
-            except ApiError as exc:
-                if exc.status_code != 404:
-                    raise
-            else:
                 succeeded = benchmark.status.phase == api.BenchmarkPhase.COMPLETED
                 benchmark_set.status.completed[benchmark.metadata.name] = succeeded
                 _ = await save_benchmark_status(benchmark_set)
-        return
-    # The only other phase we want to act on is summarising
-    if benchmark.status.phase != api.BenchmarkPhase.SUMMARISING:
-        return
-    # Allow the benchmark to summarise itself and save
-    try:
-        benchmark.summarise()
-    except errors.PodResultsIncompleteError as exc:
-        # Convert this into a temporary error with a short delay, as it is likely
-        # to be resolved quickly
-        raise kopf.TemporaryError(str(exc), delay = 1)
-    else:
-        benchmark = await save_benchmark_status(benchmark)
-    # Once the benchmark summary has been saved successfully, we can delete the managed resources
-    for ref in benchmark.status.managed_resources:
-        ekapi = EK_CLIENT.api(ref.api_version)
-        resource = await ekapi.resource(ref.kind)
-        await resource.delete(ref.name, namespace = benchmark.metadata.namespace)
-    # Make sure to delete the priority class
-    ekapi = EK_CLIENT.api("scheduling.k8s.io/v1")
-    resource = await ekapi.resource("priorityclasses")
-    _ = await resource.delete(benchmark.status.priority_class_name)
-    # Once the resources are deleted, we can mark the benchmark as completed
-    benchmark.status.phase = api.BenchmarkPhase.COMPLETED
-    benchmark.status.managed_resources = []
-    _ = await save_benchmark_status(benchmark)
+            except ApiError as exc:
+                if exc.status_code != 404:
+                    raise
+    elif benchmark.status.phase == api.BenchmarkPhase.RUNNING:
+        if not benchmark.status.started_at:
+            benchmark.status.started_at = datetime.datetime.now()
+            _ = await save_benchmark_status(benchmark)
+    elif benchmark.status.phase == api.BenchmarkPhase.SUMMARISING:
+        # Allow the benchmark to summarise itself and save
+        try:
+            benchmark.summarise()
+        except errors.PodResultsIncompleteError as exc:
+            # Convert this into a temporary error with a short delay, as it is likely
+            # to be resolved quickly
+            raise kopf.TemporaryError(str(exc), delay = 1)
+        else:
+            benchmark = await save_benchmark_status(benchmark)
+        # Once the benchmark summary has been saved successfully, we can delete the managed resources
+        for ref in benchmark.status.managed_resources:
+            ekapi = EK_CLIENT.api(ref.api_version)
+            resource = await ekapi.resource(ref.kind)
+            await resource.delete(ref.name, namespace = benchmark.metadata.namespace)
+        # Make sure to delete the priority class
+        ekapi = EK_CLIENT.api("scheduling.k8s.io/v1")
+        resource = await ekapi.resource("priorityclasses")
+        _ = await resource.delete(benchmark.status.priority_class_name)
+        # Once the resources are deleted, we can mark the benchmark as completed
+        benchmark.status.phase = api.BenchmarkPhase.COMPLETED
+        benchmark.status.managed_resources = []
+        _ = await save_benchmark_status(benchmark)
 
 
 @benchmark_handler(kopf.on.delete)
@@ -331,13 +331,12 @@ def on_benchmark_resource_event(*args, **kwargs):
                             namespace = handler_kwargs["labels"][settings.namespace_label]
                         )
                     )
+                    return await func(benchmark = benchmark, **handler_kwargs)
                 except ApiError as exc:
                     if exc.status_code == 404:
                         return
                     else:
                         raise
-                try:
-                    return await func(benchmark = benchmark, **handler_kwargs)
                 except kopf.TemporaryError as exc:
                     # On kopf temporary errors, go round the loop again after yielding control
                     await asyncio.sleep(exc.delay)
@@ -351,6 +350,8 @@ async def handle_job_event(benchmark, body, **kwargs):
     """
     Executes whenever an event occurs for a Volcano job that is part of a benchmark.
     """
+    if type == "DELETED":
+        return
     # If the benchmark is completed, there is nothing to do
     if benchmark.status.phase == api.BenchmarkPhase.COMPLETED:
         return
@@ -377,6 +378,71 @@ async def handle_pod_event(type, benchmark, body, name, namespace, status, **kwa
         return await resource.fetch(name, namespace = namespace)
     await benchmark.pod_modified(body, fetch_pod_log)
     _ = await save_benchmark_status(benchmark)
+
+
+@on_benchmark_resource_event("endpoints")
+async def handle_endpoints_event(type, benchmark, body, name, namespace, **kwargs):
+    """
+    Executes whenever an event occurs for an endpoints resource that is part of a benchmark.
+    """
+    # If the benchmark is completed, there is nothing to do
+    if benchmark.status.phase == api.BenchmarkPhase.COMPLETED:
+        return
+    # Next, see if there is a configmap that is tracking the hosts
+    resource = await EK_CLIENT.api("v1").resource("configmaps")
+    configmap = await resource.first(
+        labels = {
+            settings.kind_label: benchmark.kind,
+            settings.namespace_label: benchmark.metadata.namespace,
+            settings.name_label: benchmark.metadata.name,
+            settings.hosts_from_label: PRESENT
+        },
+        namespace = namespace
+    )
+    if not configmap:
+        return
+    # Get the list of expected pod names from the configmap
+    expected = { l.strip() for l in configmap.data.get("all-hosts", "").splitlines() }
+    # Collect up the IPs from the endpoints
+    # We include addresses and not-ready addresses as we use an init container
+    # to wait for the hosts to be ready which stops the pod moving into addresses
+    ips = {}
+    if type != "DELETED":
+        for subset in body.get("subsets", []):
+            addresses = itertools.chain(
+                subset.get("addresses", []),
+                subset.get("notReadyAddresses", [])
+            )
+            for address in addresses:
+                # If the hostname is present, use it
+                # If not, use the pod name from the targetRef
+                if "hostname" in address:
+                    hostname = address["hostname"]
+                else:
+                    target_ref = address.get("targetRef")
+                    if target_ref and target_ref["kind"] == "Pod":
+                        hostname = target_ref["name"]
+                    else:
+                        continue
+                ips[f"{hostname}.{name}"] = f"{address['ip']}  {hostname}.{name}  {hostname}"
+    _ = await resource.patch(
+        configmap.metadata.name,
+        {
+            "metadata": {
+                "resourceVersion": configmap.metadata["resourceVersion"],
+            },
+            "data": {
+                # If we have an IP for each pod, write the hosts file
+                # If not, write an empty hosts file
+                "hosts": (
+                    "\n".join([settings.default_hosts] + list(ips.values()))
+                    if not expected.difference(ips.keys())
+                    else ""
+                ),
+            },
+        },
+        namespace = configmap.metadata.namespace
+    )
 
 
 @kopf.on.create(settings.api_group, api.BenchmarkSet._meta.kind)

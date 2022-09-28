@@ -24,6 +24,7 @@ rules:
       - mpipingpongs.perftest.stackhpc.com
       - openfoams.perftest.stackhpc.com
       - rdmabandwidths.perftest.stackhpc.com
+      - rdmalatencies.perftest.stackhpc.com
     verbs:
       - update
       - patch
@@ -65,6 +66,14 @@ rules:
     verbs:
       - "*"
   - apiGroups:
+      - "rbac.authorization.k8s.io"
+    resources:
+      - serviceaccounts
+      - roles
+      - rolebindings
+    verbs:
+      - "*"
+  - apiGroups:
       - ""
     resources:
       - configmaps
@@ -76,6 +85,7 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - endpoints
       - pods
       - pods/log
     verbs:

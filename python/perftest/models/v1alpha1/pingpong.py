@@ -28,6 +28,14 @@ MPI_PINGPONG_RESULT = re.compile(
 )
 
 
+class MPITransport(str, schema.Enum):
+    """
+    Enumeration of supported MPI transports.
+    """
+    TCP = "TCP"
+    RDMA = "RDMA"
+
+
 class MPIPingPongSpec(schema.BaseModel):
     """
     Defines the parameters for the iperf benchmark.
@@ -47,6 +55,21 @@ class MPIPingPongSpec(schema.BaseModel):
     host_network: bool = Field(
         False,
         description = "Indicates whether to use host networking or not."
+    )
+    network_name: t.Optional[constr(min_length = 1)] = Field(
+        None,
+        description = (
+            "The name of a Multus network over which to run the benchmark. "
+            "Only used when host networking is false."
+        )
+    )
+    resources: t.Optional[base.ContainerResources] = Field(
+        None,
+        description = "The resources to use for benchmark containers."
+    )
+    transport: MPITransport = Field(
+        MPITransport.TCP,
+        description = "The transport to use for the benchmark."
     )
 
 
@@ -95,6 +118,13 @@ class MPIPingPongStatus(base.BenchmarkStatus):
             "Used as a headline result."
         )
     )
+    minimum_latency: t.Optional[constr(min_length = 1)] = Field(
+        None,
+        description = (
+            "The minimum latency achieved during the benchmark for any given message length. "
+            "Used as a headline result."
+        )
+    )
     master_log: t.Optional[constr(min_length = 1)] = Field(
         None,
         description = "The raw pod log of the MPI master pod."
@@ -119,9 +149,24 @@ class MPIPingPong(
             "jsonPath": ".spec.hostNetwork",
         },
         {
+            "name": "Network Name",
+            "type": "string",
+            "jsonPath": ".spec.networkName",
+        },
+        {
+            "name": "Transport",
+            "type": "string",
+            "jsonPath": ".spec.transport",
+        },
+        {
             "name": "Status",
             "type": "string",
             "jsonPath": ".status.phase",
+        },
+        {
+            "name": "Started",
+            "type": "date",
+            "jsonPath": ".status.startedAt",
         },
         {
             "name": "Finished",
@@ -132,6 +177,11 @@ class MPIPingPong(
             "name": "Peak Bandwidth",
             "type": "string",
             "jsonPath": ".status.peakBandwidth",
+        },
+        {
+            "name": "Min latency",
+            "type": "string",
+            "jsonPath": ".status.minimumLatency",
         },
     ]
 ):
@@ -182,7 +232,8 @@ class MPIPingPong(
             raise PodLogFormatError("unable to get bandwidth units from pod log")
         # Collect the results for each message size along with the peak result
         results = []
-        peak_result = None
+        peak_bw_result = None
+        min_lat_result = None
         for line in lines:
             match = MPI_PINGPONG_RESULT.search(line.strip())
             if match is not None:
@@ -193,13 +244,16 @@ class MPIPingPong(
                     bandwidth = match.group("bandwidth")
                 )
                 results.append(result)
-                if not peak_result or result.bandwidth > peak_result.bandwidth:
-                    peak_result = result
+                if not peak_bw_result or result.bandwidth > peak_bw_result.bandwidth:
+                    peak_bw_result = result
+                if not min_lat_result or result.time < min_lat_result.time:
+                    min_lat_result = result
             else:
                 continue
         if results:
             self.status.results = results
         else:
             raise PodLogFormatError("unable to locate results in pod log")
-        # Format the peak result for display
-        self.status.peak_bandwidth = f"{peak_result.bandwidth} {self.status.bandwidth_units}"
+        # Format the results for display
+        self.status.peak_bandwidth = f"{peak_bw_result.bandwidth} {self.status.bandwidth_units}"
+        self.status.minimum_latency = f"{min_lat_result.time} {self.status.time_units}"

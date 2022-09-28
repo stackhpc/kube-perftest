@@ -1,16 +1,19 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: BenchmarkSet
 metadata:
-  name: iperf
+  name: iperf-accelerated
 spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1
     kind: IPerf
     spec:
       imagePullPolicy: Always
+      hostNetwork: false
+      networkName: mlnx-net
+      resources:
+        limits:
+          mellanox.com/mlnxnet: 1
       duration: 30
   permutations:
     product:
-      hostNetwork: [true, false]
-      serverService: [true, false]
-      streams: [1, 2, 4, 8, 16, 32, 64]
+      streams: [1, 2, 4, 8, 16, 32, 64, 80, 128]

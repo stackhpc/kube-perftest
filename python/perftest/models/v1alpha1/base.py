@@ -127,6 +127,10 @@ class BenchmarkStatus(schema.BaseModel):
         default_factory = list,
         description = "List of references to the managed resources for this benchmark."
     )
+    started_at: t.Optional[datetime.datetime] = Field(
+        None,
+        description = "The time at which the benchmark started."
+    )
     finished_at: t.Optional[datetime.datetime] = Field(
         None,
         description = "The time at which the benchmark finished."

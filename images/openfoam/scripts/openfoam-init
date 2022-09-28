@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+PROBLEM_SIZE=$1
+ITERATIVE_METHOD=$2
+NUM_PROCS=$3
+HOSTS_FILE=$4
+
+# Set openfoam environment
+source /opt/openfoam10/etc/bashrc
+
+# Prepare benchmark
+mkdir -p /opt/benchmark
+cp -r /opt/hpc/Lid_driven_cavity-3d/${PROBLEM_SIZE}/* /opt/benchmark
+ln -sf /opt/benchmark/system/fvSolution.${ITERATIVE_METHOD} /opt/benchmark/system/fvSolution
+mv /opt/benchmark/constant/transportProperties /opt/benchmark/constant/physicalProperties
+sed -i "s/^numberOfSubdomains.*/numberOfSubdomains ${NUM_PROCS};/g" /opt/benchmark/system/decomposeParDict
+
+# Stage benchmark datafiles
+cd /opt/benchmark
+blockMesh
+decomposePar -force
+
+while read host; do
+  if [ -z "$host" ]; then
+    continue
+  fi
+  while ! rsync -avL /opt/benchmark ${host}:/opt/ ; do
+    echo "Failed to connect to $host, waiting before retry..."
+    sleep 5
+  done
+done < "$HOSTS_FILE"

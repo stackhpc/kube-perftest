@@ -1,14 +1,22 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: BenchmarkSet
 metadata:
-  name: rdma-bandwidth
+  name: rdma-bandwidth-accelerated
 spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1
     kind: RDMABandwidth
     spec:
       imagePullPolicy: Always
+      hostNetwork: false
+      networkName: mlnx-net
+      resources:
+        limits:
+          mellanox.com/mlnxnet: 1
+      qps: 512
+      iterations: 25
+      extraArgs:
+        - --tclass=96
   permutations:
     product:
-      hostNetwork: [true]
       mode: [read, write]

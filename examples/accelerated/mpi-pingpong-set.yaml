@@ -1,13 +1,18 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: BenchmarkSet
 metadata:
-  name: rdma-latency
+  name: mpi-pingpong-accelerated
 spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1
-    kind: RDMALatency
+    kind: MPIPingPong
     spec:
       imagePullPolicy: Always
+      hostNetwork: false
+      networkName: mlnx-net
+      resources:
+        limits:
+          mellanox.com/mlnxnet: 1
   permutations:
     product:
-      hostNetwork: [true]
+      transport: [TCP, RDMA]

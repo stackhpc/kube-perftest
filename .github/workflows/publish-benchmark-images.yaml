@@ -15,6 +15,7 @@ jobs:
     strategy:
       matrix:
         include:
+          - component: discovery
           - component: fio
           - component: iperf
           - component: mpi-benchmarks

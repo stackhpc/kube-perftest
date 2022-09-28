@@ -46,9 +46,6 @@ metadata:
 spec:
   # Indicates whether to use the host network or the pod network
   hostNetwork: true
-  # Indicates whether the client should access the server pod directly (false)
-  # or via a Kubernetes service (true)
-  serverService: false
   # The number of parallel streams to use
   streams: 8
   # The duration of the test
@@ -121,11 +118,9 @@ spec:
     # Permutations are calculated as a cross-product of the specified names and values
     product:
       hostNetwork: [true, false]
-      serverService: [true, false]
       streams: [1, 2, 4, 8, 16, 32, 64]
     # A list of explicit permutations to include
     explicit:
       - hostNetwork: true
-        serverService: false
         streams: 128
 ```

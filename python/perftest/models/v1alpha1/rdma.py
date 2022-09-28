@@ -69,9 +69,28 @@ class RDMASpec(schema.BaseModel):
         False,
         description = "Indicates whether to use host networking or not."
     )
+    network_name: t.Optional[constr(min_length = 1)] = Field(
+        None,
+        description = (
+            "The name of a Multus network over which to run the benchmark. "
+            "Only used when host networking is false."
+        )
+    )
     resources: t.Optional[base.ContainerResources] = Field(
         None,
         description = "The resources to use for benchmark containers."
+    )
+    mode: RDMAMode = Field(
+        RDMAMode.READ,
+        description = "The mode for the test."
+    )
+    iterations: schema.conint(ge = 5) = Field(
+        1000,
+        description = "The number of iterations for each message size."
+    )
+    extra_args: t.List[constr(min_length = 1)] = Field(
+        default_factory = list,
+        description = "Extra arguments for the command."
     )
 
 
@@ -138,9 +157,9 @@ class RDMABandwidthSpec(RDMASpec):
     """
     Defines the parameters for the RDMA bandwidth benchmark.
     """
-    mode: RDMAMode = Field(
-        RDMAMode.READ,
-        description = "The mode for the test."
+    qps: schema.conint(gt = 0) = Field(
+        1,
+        description = "The number of Queue Pairs (QPs) to use."
     )
 
 
@@ -202,9 +221,29 @@ class RDMABandwidth(
             "jsonPath": ".spec.hostNetwork",
         },
         {
+            "name": "Network Name",
+            "type": "string",
+            "jsonPath": ".spec.networkName",
+        },
+        {
+            "name": "QPs",
+            "type": "integer",
+            "jsonPath": ".spec.qps",
+        },
+        {
+            "name": "Iterations",
+            "type": "string",
+            "jsonPath": ".spec.iterations",
+        },
+        {
             "name": "Status",
             "type": "string",
             "jsonPath": ".status.phase",
+        },
+        {
+            "name": "Started",
+            "type": "date",
+            "jsonPath": ".status.startedAt",
         },
         {
             "name": "Finished",
@@ -326,14 +365,34 @@ class RDMALatency(
     subresources = {"status": {}},
     printer_columns = [
         {
+            "name": "Mode",
+            "type": "string",
+            "jsonPath": ".spec.mode",
+        },
+        {
             "name": "Host Network",
             "type": "boolean",
             "jsonPath": ".spec.hostNetwork",
         },
         {
+            "name": "Network Name",
+            "type": "string",
+            "jsonPath": ".spec.networkName",
+        },
+        {
+            "name": "Iterations",
+            "type": "string",
+            "jsonPath": ".spec.iterations",
+        },
+        {
             "name": "Status",
             "type": "string",
             "jsonPath": ".status.phase",
+        },
+        {
+            "name": "Started",
+            "type": "date",
+            "jsonPath": ".status.startedAt",
         },
         {
             "name": "Finished",
@@ -356,7 +415,6 @@ class RDMALatency(
     )
 
     def extract_result(self, pod_log_lines: t.Iterable[str]):
-        print("\n".join(pod_log_lines))
         # Drop the lines from the log until we reach the start of the results
         lines = it.dropwhile(lambda l: not l.strip().startswith("#bytes"), pod_log_lines)
         # Skip the header
@@ -365,7 +423,6 @@ class RDMALatency(
         results = []
         min_result = None
         for line in lines:
-            print(line)
             match = RDMA_LATENCY_REGEX.search(line.strip())
             if match is not None:
                 result = RDMALatencyResult(

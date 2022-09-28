@@ -1,0 +1,11 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: OpenFOAM
+metadata:
+  name: openfoam-hostnet
+spec:
+  imagePullPolicy: Always
+  hostNetwork: true
+  transport: TCP
+  problemSize: S
+  numProcs: 48
+  numNodes: 2

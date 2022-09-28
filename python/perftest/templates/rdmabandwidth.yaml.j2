@@ -1,114 +1,118 @@
----
-apiVersion: batch.volcano.sh/v1alpha1
-kind: Job
-metadata:
-  name: {{ benchmark.metadata.name }}
-  labels:
-    {{ settings.kind_label }}: {{ benchmark.kind }}
-    {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-    {{ settings.name_label }}: {{ benchmark.metadata.name }}
-spec:
-  maxRetry: 10
-  minAvailable: 2
-  schedulerName: {{ settings.scheduler_name }}
-  queue: {{ settings.queue_name }}
-  priorityClassName: {{ benchmark.status.priority_class_name }}
-  plugins:
-    env: []
-    ssh: []
-    svc: ["--disable-network-policy"]
-  policies:
-    - event: PodEvicted
-      action: RestartJob
-  tasks:
-    - replicas: 1
-      name: server
-      template:
-        metadata:
-          labels:
-            {{ settings.kind_label }}: {{ benchmark.kind }}
-            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-            {{ settings.name_label }}: {{ benchmark.metadata.name }}
-            {{ settings.component_label }}: server
-        spec:
-          priorityClassName: {{ benchmark.status.priority_class_name }}
-          {%- if benchmark.spec.host_network %}
-          hostNetwork: true
-          dnsPolicy: ClusterFirstWithHostNet
-          {%- endif %}
-          containers:
-            - name: server
-              image: {{ benchmark.spec.image }}
-              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
-              securityContext:
-                privileged: true
-                allowPrivilegeEscalation: true
-              args:
-                - ib_{{ benchmark.spec.mode }}_bw
-                - -a
-                - -b
-                - --report_gbits
-              {%- if benchmark.spec.resources %}
-              resources:
-                {{ benchmark.spec.resources | toyaml | indent(16) }}
-              {%- endif %}
-          # Because we generally want to test raw network performance, prevent the pod
-          # from running on a node that already has another benchmark component running,
-          # for any benchmark
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.kind_label }}
-                        operator: Exists
-                  topologyKey: "kubernetes.io/hostname"
+{% import '_macros.j2' as macros %}
 
-    - replicas: 1
-      name: client
-      policies:
-        # When the client terminates successfully, the job is done
-        - event: TaskCompleted
-          action: CompleteJob
-      template:
-        metadata:
-          labels:
-            {{ settings.kind_label }}: {{ benchmark.kind }}
-            {{ settings.namespace_label }}: {{ benchmark.metadata.namespace }}
-            {{ settings.name_label }}: {{ benchmark.metadata.name }}
-            {{ settings.component_label }}: client
-        spec:
-          priorityClassName: {{ benchmark.status.priority_class_name }}
-          {%- if benchmark.spec.host_network %}
-          hostNetwork: true
-          dnsPolicy: ClusterFirstWithHostNet
-          {%- endif %}
-          restartPolicy: OnFailure
-          containers:
-            - name: client
-              image: {{ benchmark.spec.image }}
-              imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
-              securityContext:
-                privileged: true
-                allowPrivilegeEscalation: true
-              args:
-                - ib_{{ benchmark.spec.mode }}_bw
-                - -a
-                - -b
-                - --report_gbits
-                - "$(VC_SERVER_HOSTS)"
-              {%- if benchmark.spec.resources %}
-              resources:
-                {{ benchmark.spec.resources | toyaml | indent(16) }}
-              {%- endif %}
-          # Because we generally want to test raw network performance, prevent the pod
-          # from running on a node that already has another benchmark component running,
-          # for any benchmark
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                - labelSelector:
-                    matchExpressions:
-                      - key: {{ settings.kind_label }}
-                        operator: Exists
-                  topologyKey: "kubernetes.io/hostname"
+{{ macros.discovery_rbac(benchmark) }}
+---
+{{ macros.discovery_service(benchmark) }}
+---
+{{ macros.discovery_configmap(benchmark, server = 1, client = 1) }}
+---
+{% call macros.job(benchmark) -%}
+tasks:
+  - name: server
+    replicas: 1
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark, "server") | indent(10) }}
+        {%- if not benchmark.spec.host_network and benchmark.spec.network_name %}
+        annotations:
+          v1.multus-cni.io/default-network: {{ benchmark.spec.network_name }}
+        {%- endif %}
+      spec:
+        priorityClassName: {{ benchmark.status.priority_class_name }}
+        serviceAccountName: {{ benchmark.metadata.name }}
+        {%- if benchmark.spec.host_network %}
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        {%- endif %}
+        initContainers:
+          - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+        containers:
+          - name: server
+            image: {{ benchmark.spec.image }}
+            imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+            securityContext:
+              capabilities:
+                add: [ "IPC_LOCK" ]
+            args:
+              - ib_{{ benchmark.spec.mode }}_bw
+              - -a
+              - -F
+              - --report_gbits
+              - -q
+              - "{{ benchmark.spec.qps }}"
+              - -n
+              - "{{ benchmark.spec.iterations }}"
+              {%- for arg in benchmark.spec.extra_args %}
+              - "{{ arg }}"
+              {%- endfor %}
+            {%- if benchmark.spec.resources %}
+            resources:
+              {{ benchmark.spec.resources | toyaml | indent(14) }}
+            {%- endif %}
+            volumeMounts:
+              {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
+        volumes:
+          - {{ macros.discovery_volume(benchmark) | indent(12) }}
+        # Because we generally want to test raw network performance, prevent the pod
+        # from running on a node that already has another benchmark component running,
+        # for any benchmark
+        {{ macros.distribution_exclusive(benchmark) | indent(8) }}
+
+  - name: client
+    replicas: 1
+    policies:
+      # When the client terminates successfully, the job is done
+      - event: TaskCompleted
+        action: CompleteJob
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark, "client") | indent(10) }}
+        {%- if not benchmark.spec.host_network and benchmark.spec.network_name %}
+        annotations:
+          v1.multus-cni.io/default-network: {{ benchmark.spec.network_name }}
+        {%- endif %}
+      spec:
+        priorityClassName: {{ benchmark.status.priority_class_name }}
+        serviceAccountName: {{ benchmark.metadata.name }}
+        {%- if benchmark.spec.host_network %}
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        {%- endif %}
+        restartPolicy: OnFailure
+        initContainers:
+          - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+        containers:
+          - name: client
+            image: {{ benchmark.spec.image }}
+            imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+            securityContext:
+              capabilities:
+                add: [ "IPC_LOCK" ]
+            args:
+              - ib_{{ benchmark.spec.mode }}_bw
+              - -a
+              - -F
+              - --report_gbits
+              - -q
+              - "{{ benchmark.spec.qps }}"
+              - -n
+              - "{{ benchmark.spec.iterations }}"
+              {%- for arg in benchmark.spec.extra_args %}
+              - "{{ arg }}"
+              {%- endfor %}
+              - "{{ benchmark.metadata.name }}-server-0.{{ benchmark.metadata.name }}"
+            {%- if benchmark.spec.resources %}
+            resources:
+              {{ benchmark.spec.resources | toyaml | indent(14) }}
+            {%- endif %}
+            volumeMounts:
+              {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
+        volumes:
+          - {{ macros.discovery_volume(benchmark) | indent(12) }}
+        # Because we generally want to test raw network performance, prevent the pod
+        # from running on a node that already has another benchmark component running,
+        # for any benchmark
+        {{ macros.distribution_exclusive(benchmark) | indent(8) }}
+{%- endcall %}
