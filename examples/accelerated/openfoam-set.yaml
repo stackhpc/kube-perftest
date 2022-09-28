@@ -18,4 +18,4 @@ spec:
   permutations:
     product:
       transport: [TCP, RDMA]
-      numNodes: [2, 4, 8, 12, 16, 24, 48]
+      numNodes: [2, 4, 8, 12]

@@ -35,7 +35,7 @@ tasks:
               capabilities:
                 add: [ "IPC_LOCK" ]
             args:
-              - ib_read_lat
+              - ib_{{ benchmark.spec.mode }}_lat
               - -a
               - -F
               - -n
@@ -88,7 +88,7 @@ tasks:
               capabilities:
                 add: [ "IPC_LOCK" ]
             args:
-              - ib_read_lat
+              - ib_{{ benchmark.spec.mode }}_lat
               - -a
               - -F
               - -n

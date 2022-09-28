@@ -1,0 +1,14 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: RDMALatency
+metadata:
+  name: rdma-latency-accelerated
+spec:
+  imagePullPolicy: Always
+  hostNetwork: false
+  networkName: mlnx-net
+  resources:
+    limits:
+      mellanox.com/mlnxnet: 1
+  iterations: 1000
+  extraArgs:
+    - --tclass=96

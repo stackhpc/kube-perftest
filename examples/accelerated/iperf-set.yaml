@@ -16,4 +16,4 @@ spec:
       duration: 30
   permutations:
     product:
-      streams: [1, 2, 4, 8, 16, 32, 64, 128]
+      streams: [1, 2, 4, 8, 16, 32, 64, 80, 128]
