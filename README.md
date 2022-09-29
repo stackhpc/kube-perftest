@@ -4,11 +4,14 @@
 [Kubernetes](https://kubernetes.io/) clusters.
 
 - [Installation](#installation)
+- [Network selection](#network-selection)
+- [Benchmark set](#benchmark-set)
 - [Benchmarks](#benchmarks)
   - [iperf](#iperf)
-  - [Intel MPI Benchmarks (IMB) MPI1 PingPong](#intel-mpi-benchmarks-imb-mpi1-pingpong)
+  - [MPI PingPong](#mpi-pingpong)
   - [OpenFOAM](#openfoam)
-- [Benchmark set](#benchmark-set)
+  - [RDMA Bandwidth](#rdma-bandwidth)
+  - [RDMA Latency](#rdma-latency)
 
 ## Installation
 
@@ -26,73 +29,43 @@ helm upgrade \
 
 For most use cases, no customisations to the Helm values will be necessary.
 
-## Benchmarks
+## Network selection
 
-Currently, the following benchmarks are supported:
+All the benchmarks are capable of running using the Kubernetes pod network or the host network
+(using `hostNetwork: true` on the benchmark pods).
 
-### iperf
+Benchmarks are also able to run on accelerated networks where available, using
+[Multus](https://github.com/k8snetworkplumbingwg/multus-cni) for multiple CNIs and
+[device plugins](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/)
+to request network resources.
 
-Runs the [iperf](https://en.wikipedia.org/wiki/Iperf) network performance tool to measure bandwidth
-for a transfer between two pods.
+This allows benchmarks to levarage technologies such as
+[SR-IOV](https://en.wikipedia.org/wiki/Single-root_input/output_virtualization)
+(via the [SR-IOV network device plugin](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin)),
+[macvlan](https://backreference.org/2014/03/20/some-notes-on-macvlanmacvtap/) (via the
+[macvlan CNI plugin](https://www.cni.dev/plugins/current/main/macvlan/)) and
+[RDMA](https://en.wikipedia.org/wiki/Remote_direct_memory_access)
+(e.g. via the [RDMA shared device plugin](https://github.com/Mellanox/k8s-rdma-shared-dev-plugin)).
 
-Can be run using CNI or host networking, using a Kubernetes `Service` or connecting
-directly to the server pod and using a configurable number of client streams.
-
-```yaml
-apiVersion: perftest.stackhpc.com/v1alpha1
-kind: IPerf
-metadata:
-  name: iperf
-spec:
-  # Indicates whether to use the host network or the pod network
-  hostNetwork: true
-  # The number of parallel streams to use
-  streams: 8
-  # The duration of the test
-  duration: 30
-```
-
-### Intel MPI Benchmarks (IMB) MPI1 PingPong
-
-Runs the
-[IMB-MPI1 PingPong](https://www.intel.com/content/www/us/en/develop/documentation/imb-user-guide/top/mpi-1-benchmarks/single-transfer-benchmarks/pingpong-pingpongspecificsource-pingponganysource.html)
-benchmark to measure the average round-trip time and bandwidth for MPI messages of different sizes
-between two pods.
-
-Currently uses MPI over TCP, initialised over SSH, and can be run using CNI or host networking.
+The networking is configured using the following properties of the benchmark `spec`:
 
 ```yaml
-apiVersion: perftest.stackhpc.com/v1alpha1
-kind: MPIPingPong
-metadata:
-  name: mpi-pingpong
 spec:
-  # Indicates whether to use the host network or the pod network
-  hostNetwork: true
-```
-
-### OpenFOAM
-
-This benchmark runs the
-[3-D Lid Driven cavity flow benchmark](https://develop.openfoam.com/committees/hpc#3-d-lid-driven-cavity-flow)
-from the OpenFOAM(https://www.openfoam.com/) benchmark suite.
-
-Currently uses MPI over TCP, initialised over SSH, and can be run using CNI or host networking.
-
-```yaml
-apiVersion: perftest.stackhpc.com/v1alpha1
-kind: OpenFOAM
-metadata:
-  name: openfoam
-spec:
-  # Indicates whether to use the host network or the pod network
+  # Indicates whether to use host networking or not
+  # If true, networkName is not used
   hostNetwork: false
-  # The problem size to use (S, M, XL, XXL)
-  problemSize: S
-  # The number of MPI processes to use
-  numProcs: 16
-  # The number of MPI pods to launch
-  numNodes: 8
+  # The name of a Multus network to use
+  # Only used if hostNetwork is false
+  # If not given, the Kubernetes pod network is used
+  networkName: namespace/netname
+  # The resources for benchmark pods
+  resources:
+    limits:
+      # E.g. requesting a share of an RDMA device
+      rdma/hca_shared_devices_a: 1
+  # The MTU to set on the interface *inside* the container
+  # If not given, the default MTU is used
+  mtu: 9000
 ```
 
 ## Benchmark set
@@ -123,4 +96,127 @@ spec:
     explicit:
       - hostNetwork: true
         streams: 128
+```
+
+## Benchmarks
+
+Currently, the following benchmarks are supported:
+
+### iperf
+
+Runs the [iperf](https://en.wikipedia.org/wiki/Iperf) network performance tool to measure bandwidth
+for a transfer between two pods.
+
+```yaml
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: IPerf
+metadata:
+  name: iperf
+spec:
+  # The number of parallel streams to use
+  streams: 8
+  # The duration of the test
+  duration: 30
+```
+
+### MPI PingPong
+
+Runs the
+[Intel MPI Benchmarks (IMB) MPI1 PingPong](https://www.intel.com/content/www/us/en/develop/documentation/imb-user-guide/top/mpi-1-benchmarks/single-transfer-benchmarks/pingpong-pingpongspecificsource-pingponganysource.html)
+benchmark to measure the average round-trip time and bandwidth for MPI messages of different sizes
+between two pods.
+
+Uses [Open MPI](https://www.open-mpi.org/) initialised over SSH. The data plane can use TCP
+or, hardware and network permitting, [RDMA](https://en.wikipedia.org/wiki/Remote_direct_memory_access)
+via [UCX](https://openucx.org/).
+
+```yaml
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: MPIPingPong
+metadata:
+  name: mpi-pingpong
+spec:
+  # The MPI transport to use - one of TCP, RDMA
+  transport: TCP
+```
+
+### OpenFOAM
+
+[OpenFOAM](https://www.openfoam.com/) is a toolbox for solving problems in
+[computational fluid dynamics (CFD)](https://en.wikipedia.org/wiki/Computational_fluid_dynamics).
+It is included here as an example of a "real world" workload.
+
+This benchmark runs the
+[3-D Lid Driven cavity flow benchmark](https://develop.openfoam.com/committees/hpc#3-d-lid-driven-cavity-flow)
+from the OpenFOAM benchmark suite.
+
+Uses [Open MPI](https://www.open-mpi.org/) initialised over SSH. The data plane can use TCP
+or, hardware and network permitting, [RDMA](https://en.wikipedia.org/wiki/Remote_direct_memory_access)
+via [UCX](https://openucx.org/).
+
+```yaml
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: OpenFOAM
+metadata:
+  name: openfoam
+spec:
+  # The MPI transport to use - one of TCP, RDMA
+  transport: TCP
+  # The problem size to use - one of S, M, XL, XXL
+  problemSize: S
+  # The number of MPI processes to use
+  numProcs: 16
+  # The number of MPI pods to launch
+  numNodes: 8
+```
+
+### RDMA Bandwidth
+
+Runs the RDMA bandwidth benchmarks (i.e. `ib_{read,write}_bw`) from the
+[perftest collection](https://github.com/linux-rdma/perftest).
+
+This benchmark requires an RDMA-capable network to be specified.
+
+```yaml
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: RDMABandwidth
+metadata:
+  name: rdma-bandwidth
+spec:
+  # The mode for the test - read or write
+  mode: read
+  # The number of iterations to do at each message size
+  # Defaults to 1000 if not given
+  iterations: 1000
+  # The number of queue pairs to use
+  # Defaults to 1 if not given
+  # A higher number of queue pairs can help to spread traffic,
+  # e.g. over NICs in a bond when using RoCE-LAG
+  qps: 1
+  # Extra arguments to be added to the command
+  extraArgs:
+    - --tclass=96
+```
+
+### RDMA Latency
+
+Runs the RDMA latency benchmarks (i.e. `ib_{read,write}_lat`) from the
+[perftest collection](https://github.com/linux-rdma/perftest).
+
+This benchmark requires an RDMA-capable network to be specified.
+
+```yaml
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: RDMALatency
+metadata:
+  name: rdma-latency
+spec:
+  # The mode for the test - read or write
+  mode: read
+  # The number of iterations to do at each message size
+  # Defaults to 1000 if not given
+  iterations: 1000
+  # Extra arguments to be added to the command
+  extraArgs:
+    - --tclass=96
 ```
