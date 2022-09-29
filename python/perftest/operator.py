@@ -155,8 +155,7 @@ async def handle_benchmark_created(benchmark, **kwargs):
     # Use a lock to avoid two benchmarks getting the same priority
     current_priority = settings.initial_priority + 1
     async with PRIORITY_LOCK:
-        ekapi = EK_CLIENT.api("scheduling.k8s.io/v1")
-        resource = await ekapi.resource("priorityclasses")
+        resource = await EK_CLIENT.api("scheduling.k8s.io/v1").resource("priorityclasses")
         async for pc in resource.list(labels = { settings.kind_label: PRESENT }):
             # If the priority class has labels that match the benchmark, use it
             # If not, use the priority of the class to adjust the current priority
@@ -251,8 +250,7 @@ async def handle_benchmark_status_changed(benchmark, **kwargs):
             None
         )
         if ref:
-            ekapi = EK_CLIENT.api(ref.api_version)
-            resource = await ekapi.resource(ref.kind)
+            resource = await EK_CLIENT.api(ref.api_version).resource(ref.kind)
             try:
                 benchmark_set = api.BenchmarkSet.parse_obj(
                     await resource.fetch(
@@ -282,12 +280,10 @@ async def handle_benchmark_status_changed(benchmark, **kwargs):
             benchmark = await save_benchmark_status(benchmark)
         # Once the benchmark summary has been saved successfully, we can delete the managed resources
         for ref in benchmark.status.managed_resources:
-            ekapi = EK_CLIENT.api(ref.api_version)
-            resource = await ekapi.resource(ref.kind)
+            resource = await EK_CLIENT.api(ref.api_version).resource(ref.kind)
             await resource.delete(ref.name, namespace = benchmark.metadata.namespace)
         # Make sure to delete the priority class
-        ekapi = EK_CLIENT.api("scheduling.k8s.io/v1")
-        resource = await ekapi.resource("priorityclasses")
+        resource = await EK_CLIENT.api("scheduling.k8s.io/v1").resource("priorityclasses")
         _ = await resource.delete(benchmark.status.priority_class_name)
         # Once the resources are deleted, we can mark the benchmark as completed
         benchmark.status.phase = api.BenchmarkPhase.COMPLETED
@@ -301,12 +297,10 @@ async def handle_benchmark_deleted(benchmark, **kwargs):
     Executes when a benchmark is deleted.
     """
     for ref in benchmark.status.managed_resources:
-        ekapi = EK_CLIENT.api(ref.api_version)
-        resource = await ekapi.resource(ref.kind)
+        resource = await EK_CLIENT.api(ref.api_version).resource(ref.kind)
         await resource.delete(ref.name, namespace = benchmark.metadata.namespace)
     # Make sure to delete the priority class
-    ekapi = EK_CLIENT.api("scheduling.k8s.io/v1")
-    resource = await ekapi.resource("priorityclasses")
+    resource = await EK_CLIENT.api("scheduling.k8s.io/v1").resource("priorityclasses")
     await resource.delete(benchmark.status.priority_class_name)
 
 
@@ -373,11 +367,44 @@ async def handle_pod_event(type, benchmark, body, name, namespace, status, **kwa
     # Allow the benchmark to make a status update based on the pod
     # We pass a callback that allows the benchmark to access the pod log if required
     async def fetch_pod_log() -> str:
-        ekapi = EK_CLIENT.api("v1")
-        resource = await ekapi.resource("pods/log")
+        resource = await EK_CLIENT.api("v1").resource("pods/log")
         return await resource.fetch(name, namespace = namespace)
     await benchmark.pod_modified(body, fetch_pod_log)
     _ = await save_benchmark_status(benchmark)
+
+
+@on_benchmark_resource_event("configmaps", labels = { settings.hosts_from_label: kopf.PRESENT })
+async def handle_discovery_configmap_event(type, benchmark, body, name, namespace, **kwargs):
+    """
+    Executes whenever an event occurs for a discovery configmap.
+    """
+    if type == "DELETED":
+        return
+    # If the benchmark is completed, there is nothing to do
+    if benchmark.status.phase == api.BenchmarkPhase.COMPLETED:
+        return
+    # If the hosts are not available yet, there is nothing to do
+    if not body["data"].get("hosts"):
+        return
+    # If the hosts are available, annotate all the pods in the benchmark
+    resource = await EK_CLIENT.api("v1").resource("pods")
+    labels = {
+        settings.kind_label: benchmark.kind,
+        settings.namespace_label: benchmark.metadata.namespace,
+        settings.name_label: benchmark.metadata.name,
+    }
+    async for pod in resource.list(labels = labels):
+        _ = await resource.patch(
+            pod.metadata.name,
+            {
+                "metadata": {
+                    "annotations": {
+                        settings.hosts_available_annotation: "yes",
+                    },
+                },
+            },
+            namespace = pod.metadata.namespace
+        )
 
 
 @on_benchmark_resource_event("endpoints")

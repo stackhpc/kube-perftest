@@ -13,7 +13,7 @@ from ...utils import format_amount
 from . import base
 
 
-class IPerfSpec(schema.BaseModel):
+class IPerfSpec(base.BenchmarkSpec):
     """
     Defines the parameters for the iperf benchmark.
     """
@@ -24,21 +24,6 @@ class IPerfSpec(schema.BaseModel):
     image_pull_policy: base.ImagePullPolicy = Field(
         base.ImagePullPolicy.IF_NOT_PRESENT,
         description = "The pull policy for the image."
-    )
-    host_network: bool = Field(
-        False,
-        description = "Indicates whether to use host networking or not."
-    )
-    network_name: t.Optional[constr(min_length = 1)] = Field(
-        None,
-        description = (
-            "The name of a Multus network over which to run the benchmark. "
-            "Only used when host networking is false."
-        )
-    )
-    resources: t.Optional[base.ContainerResources] = Field(
-        None,
-        description = "The resources to use for benchmark containers."
     )
     duration: schema.conint(gt = 0) = Field(
         ...,
@@ -119,6 +104,12 @@ class IPerf(
             "jsonPath": ".spec.networkName",
         },
         {
+            "name": "MTU",
+            "type": "integer",
+            "jsonPath": ".spec.mtu",
+            "priority": 1,
+        },
+        {
             "name": "Duration",
             "type": "integer",
             "jsonPath": ".spec.duration",
@@ -132,6 +123,18 @@ class IPerf(
             "name": "Status",
             "type": "string",
             "jsonPath": ".status.phase",
+        },
+        {
+            "name": "Server IP",
+            "type": "string",
+            "jsonPath": ".status.serverPod.podIp",
+            "priority": 1,
+        },
+        {
+            "name": "Client IP",
+            "type": "string",
+            "jsonPath": ".status.clientPod.podIp",
+            "priority": 1,
         },
         {
             "name": "Started",
@@ -213,5 +216,5 @@ class IPerf(
         )
         # For the summary result, we use the combined bandwidth
         # However we want to convert it from Kbits/sec to something friendlier
-        amount, prefix = format_amount(self.status.result.sum.bandwidth, "K")
+        amount, prefix = format_amount(self.status.result.sum.bandwidth, "K", quotient = 1000)
         self.status.summary_result = f"{amount} {prefix}bits/sec"

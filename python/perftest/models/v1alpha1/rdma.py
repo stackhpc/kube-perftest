@@ -53,7 +53,7 @@ class RDMAMode(str, schema.Enum):
     WRITE = "write"
 
 
-class RDMASpec(schema.BaseModel):
+class RDMASpec(base.BenchmarkSpec):
     """
     Defines the common parameters for RDMA benchmarks.
     """
@@ -64,21 +64,6 @@ class RDMASpec(schema.BaseModel):
     image_pull_policy: base.ImagePullPolicy = Field(
         base.ImagePullPolicy.IF_NOT_PRESENT,
         description = "The pull policy for the image."
-    )
-    host_network: bool = Field(
-        False,
-        description = "Indicates whether to use host networking or not."
-    )
-    network_name: t.Optional[constr(min_length = 1)] = Field(
-        None,
-        description = (
-            "The name of a Multus network over which to run the benchmark. "
-            "Only used when host networking is false."
-        )
-    )
-    resources: t.Optional[base.ContainerResources] = Field(
-        None,
-        description = "The resources to use for benchmark containers."
     )
     mode: RDMAMode = Field(
         RDMAMode.READ,
@@ -130,14 +115,13 @@ class RDMABenchmark(base.Benchmark, abstract = True):
         pod: t.Dict[str, t.Any],
         fetch_pod_log: t.Callable[[], t.Awaitable[str]]
     ):
+        component = pod["metadata"]["labels"][settings.component_label]
         pod_phase = pod.get("status", {}).get("phase", "Unknown")
         # If the pod is in the running phase, record the info
         if pod_phase == "Running":
-            component = pod["metadata"]["labels"][settings.component_label]
             setattr(self.status, f"{component}_pod", base.PodInfo.from_pod(pod))
-        # When a pod succeeds, record the pod log
-        # Note that only the client pod ever succeeds as the server is forcibly terminated
-        elif pod_phase == "Succeeded":
+        # When a client pod succeeds, record the pod log
+        elif component == "client" and pod_phase == "Succeeded":
             self.status.client_log = await fetch_pod_log()
 
     def extract_result(self, pod_log_lines: t.Iterable[str]):
@@ -211,11 +195,6 @@ class RDMABandwidth(
     subresources = {"status": {}},
     printer_columns = [
         {
-            "name": "Mode",
-            "type": "string",
-            "jsonPath": ".spec.mode",
-        },
-        {
             "name": "Host Network",
             "type": "boolean",
             "jsonPath": ".spec.hostNetwork",
@@ -224,6 +203,17 @@ class RDMABandwidth(
             "name": "Network Name",
             "type": "string",
             "jsonPath": ".spec.networkName",
+        },
+        {
+            "name": "MTU",
+            "type": "integer",
+            "jsonPath": ".spec.mtu",
+            "priority": 1,
+        },
+        {
+            "name": "Mode",
+            "type": "string",
+            "jsonPath": ".spec.mode",
         },
         {
             "name": "QPs",
@@ -239,6 +229,18 @@ class RDMABandwidth(
             "name": "Status",
             "type": "string",
             "jsonPath": ".status.phase",
+        },
+        {
+            "name": "Server IP",
+            "type": "string",
+            "jsonPath": ".status.serverPod.podIp",
+            "priority": 1,
+        },
+        {
+            "name": "Client IP",
+            "type": "string",
+            "jsonPath": ".status.clientPod.podIp",
+            "priority": 1,
         },
         {
             "name": "Started",
@@ -365,11 +367,6 @@ class RDMALatency(
     subresources = {"status": {}},
     printer_columns = [
         {
-            "name": "Mode",
-            "type": "string",
-            "jsonPath": ".spec.mode",
-        },
-        {
             "name": "Host Network",
             "type": "boolean",
             "jsonPath": ".spec.hostNetwork",
@@ -380,6 +377,17 @@ class RDMALatency(
             "jsonPath": ".spec.networkName",
         },
         {
+            "name": "MTU",
+            "type": "integer",
+            "jsonPath": ".spec.mtu",
+            "priority": 1,
+        },
+        {
+            "name": "Mode",
+            "type": "string",
+            "jsonPath": ".spec.mode",
+        },
+        {
             "name": "Iterations",
             "type": "string",
             "jsonPath": ".spec.iterations",
@@ -388,6 +396,18 @@ class RDMALatency(
             "name": "Status",
             "type": "string",
             "jsonPath": ".status.phase",
+        },
+        {
+            "name": "Server IP",
+            "type": "string",
+            "jsonPath": ".status.serverPod.podIp",
+            "priority": 1,
+        },
+        {
+            "name": "Client IP",
+            "type": "string",
+            "jsonPath": ".status.clientPod.podIp",
+            "priority": 1,
         },
         {
             "name": "Started",

@@ -9,6 +9,7 @@
 {{ macros.ssh_configmap(benchmark) }}
 ---
 {% call macros.job(benchmark) -%}
+minAvailable: {{ benchmark.spec.num_nodes + 1 }}
 plugins:
   env: []
   ssh: []
@@ -37,6 +38,7 @@ tasks:
         restartPolicy: OnFailure
         initContainers:
           - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+          {{ macros.networking_mtu_init_container(benchmark) | indent(10) }}
           - name: openfoam-init
             image: {{ benchmark.spec.image }}
             imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
@@ -78,7 +80,7 @@ tasks:
               - self,tcp
               - --mca
               - pml
-              - ^ucx
+              - ob1
               - --mca
               - osc
               - ^ucx
@@ -136,6 +138,7 @@ tasks:
         restartPolicy: OnFailure
         initContainers:
           - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+          {{ macros.networking_mtu_init_container(benchmark) | indent(10) }}
         containers:
           - name: worker
             image: {{ benchmark.spec.image }}

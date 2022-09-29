@@ -45,7 +45,7 @@ class OpenFOAMIterativeMethod(str, schema.Enum):
     PETSC_ICC_CG_FIXED_NAME = "PETSc-ICC-CG.fixedNORM"
 
 
-class OpenFOAMSpec(schema.BaseModel):
+class OpenFOAMSpec(base.BenchmarkSpec):
     """
     Defines the parameters for the openFOAM benchmark.
     """
@@ -60,21 +60,6 @@ class OpenFOAMSpec(schema.BaseModel):
     ssh_port: schema.conint(gt = 0) = Field(
         2222,
         description = "The port to use for SSH."
-    )
-    host_network: bool = Field(
-        False,
-        description = "Indicates whether to use host networking or not."
-    )
-    network_name: t.Optional[constr(min_length = 1)] = Field(
-        None,
-        description = (
-            "The name of a Multus network over which to run the benchmark. "
-            "Only used when host networking is false."
-        )
-    )
-    resources: t.Optional[base.ContainerResources] = Field(
-        None,
-        description = "The resources to use for benchmark containers."
     )
     transport: MPITransport = Field(
         MPITransport.TCP,
@@ -149,6 +134,12 @@ class OpenFOAM(
             "jsonPath": ".spec.networkName",
         },
         {
+            "name": "MTU",
+            "type": "integer",
+            "jsonPath": ".spec.mtu",
+            "priority": 1,
+        },
+        {
             "name": "Transport",
             "type": "string",
             "jsonPath": ".spec.transport",
@@ -172,6 +163,12 @@ class OpenFOAM(
             "name": "Status",
             "type": "string",
             "jsonPath": ".status.phase",
+        },
+        {
+            "name": "Master IP",
+            "type": "string",
+            "jsonPath": ".status.masterPod.podIp",
+            "priority": 1,
         },
         {
             "name": "Started",

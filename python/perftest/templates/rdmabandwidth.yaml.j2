@@ -7,6 +7,7 @@
 {{ macros.discovery_configmap(benchmark, server = 1, client = 1) }}
 ---
 {% call macros.job(benchmark) -%}
+minAvailable: 2
 tasks:
   - name: server
     replicas: 1
@@ -27,6 +28,7 @@ tasks:
         {%- endif %}
         initContainers:
           - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+          {{ macros.networking_mtu_init_container(benchmark) | indent(10) }}
         containers:
           - name: server
             image: {{ benchmark.spec.image }}
@@ -83,6 +85,7 @@ tasks:
         restartPolicy: OnFailure
         initContainers:
           - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+          {{ macros.networking_mtu_init_container(benchmark) | indent(10) }}
         containers:
           - name: client
             image: {{ benchmark.spec.image }}

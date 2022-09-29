@@ -9,6 +9,7 @@ spec:
     spec:
       imagePullPolicy: Always
       hostNetwork: false
+      mtu: 9000
       duration: 30
   permutations:
     product:

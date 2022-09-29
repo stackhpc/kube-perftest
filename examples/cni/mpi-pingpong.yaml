@@ -5,4 +5,5 @@ metadata:
 spec:
   imagePullPolicy: Always
   hostNetwork: false
+  mtu: 9000
   transport: TCP

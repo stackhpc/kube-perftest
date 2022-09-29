@@ -1,18 +1,19 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: BenchmarkSet
 metadata:
-  name: openfoam-cni
+  name: iperf-sriov
 spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1
-    kind: OpenFOAM
+    kind: IPerf
     spec:
       imagePullPolicy: Always
       hostNetwork: false
-      mtu: 9000
-      transport: TCP
-      problemSize: S
-      numProcs: 48
+      networkName: default/mlnx-net
+      resources:
+        limits:
+          nvidia.com/mlnxnet: 1
+      duration: 30
   permutations:
     product:
-      numNodes: [2, 4, 8, 12, 16, 24, 48]
+      streams: [1, 2, 4, 8, 16, 32, 64, 80, 128]

@@ -77,6 +77,8 @@ class Configuration(BaseConfiguration):
     hosts_from_label: constr(min_length = 1) = None
     #: The default hosts for the generated hosts files
     default_hosts: constr(min_length = 1) = DEFAULT_HOSTS.strip()
+    #: Annotation that is added to pods to indicate that the hosts are available
+    hosts_available_annotation: constr(min_length = 1) = None
 
     #: The default priority when there are no existing priority classes
     #: By default, we use negative priorities so that jobs will not preempt other pods
@@ -107,6 +109,10 @@ class Configuration(BaseConfiguration):
     @validator("hosts_from_label", pre = True, always = True)
     def default_hosts_from_label(cls, v, *, values, **kwargs):
         return v or f"{values['api_group']}/hosts-from"
+
+    @validator("hosts_available_annotation", pre = True, always = True)
+    def default_hosts_available_annotation(cls, v, *, values, **kwargs):
+        return v or f"{values['api_group']}/hosts-available"
 
 
 settings = Configuration()

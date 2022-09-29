@@ -32,6 +32,34 @@ class ContainerResources(schema.BaseModel):
     )
 
 
+class BenchmarkSpec(schema.BaseModel):
+    """
+    Base class for benchmark specs. Mainly deals with networking.
+    """
+    host_network: bool = Field(
+        False,
+        description = "Indicates whether to use host networking or not."
+    )
+    network_name: t.Optional[constr(min_length = 1)] = Field(
+        None,
+        description = (
+            "The name of a Multus network over which to run the benchmark. "
+            "Only used when host networking is false."
+        )
+    )
+    resources: t.Optional[ContainerResources] = Field(
+        None,
+        description = "The resources to use for benchmark containers."
+    )
+    mtu: t.Optional[schema.conint(gt = 0)] = Field(
+        None,
+        description = (
+            "The MTU to use for the benchmark. "
+            "Leave empty for the default MTU."
+        )
+    )
+
+
 class BenchmarkPhase(str, schema.Enum):
     """
     Enumeration of possible phases for a benchmark.
