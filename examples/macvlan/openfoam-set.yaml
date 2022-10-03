@@ -1,0 +1,21 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: BenchmarkSet
+metadata:
+  name: openfoam-macvlan
+spec:
+  template:
+    apiVersion: perftest.stackhpc.com/v1alpha1
+    kind: OpenFOAM
+    spec:
+      imagePullPolicy: Always
+      hostNetwork: false
+      networkName: default/shared-network
+      resources:
+        limits:
+          rdma/rdma_shared_device_a: 1
+      problemSize: S
+      numProcs: 48
+  permutations:
+    product:
+      transport: [TCP, RDMA]
+      numNodes: [2, 4, 8, 12]

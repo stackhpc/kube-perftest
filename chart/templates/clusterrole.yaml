@@ -66,14 +66,6 @@ rules:
     verbs:
       - "*"
   - apiGroups:
-      - "rbac.authorization.k8s.io"
-    resources:
-      - serviceaccounts
-      - roles
-      - rolebindings
-    verbs:
-      - "*"
-  - apiGroups:
       - ""
     resources:
       - configmaps

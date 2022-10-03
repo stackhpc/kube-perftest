@@ -1,0 +1,21 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: BenchmarkSet
+metadata:
+  name: rdma-latency-macvlan
+spec:
+  template:
+    apiVersion: perftest.stackhpc.com/v1alpha1
+    kind: RDMALatency
+    spec:
+      imagePullPolicy: Always
+      hostNetwork: false
+      networkName: default/shared-network
+      resources:
+        limits:
+          rdma/rdma_shared_device_a: 1
+      iterations: 1000
+      extraArgs:
+        - --tclass=96
+  permutations:
+    product:
+      mode: [read, write]

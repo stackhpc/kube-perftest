@@ -7,47 +7,6 @@
 {%- endif %}
 {%- endmacro %}
 
-{% macro discovery_rbac(benchmark) -%}
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ benchmark.metadata.name }}
-  labels:
-    {{ labels(benchmark) | indent(4) }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: {{ benchmark.metadata.name }}-discovery
-  labels:
-    {{ labels(benchmark) | indent(4) }}
-rules:
-  # We just need to be able to read the discovery configmap
-  - apiGroups:
-      - ""
-    resources:
-      - configmaps
-    resourceNames:
-      - {{ benchmark.metadata.name }}-hosts
-    verbs:
-      - get
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: {{ benchmark.metadata.name }}-discovery
-  labels:
-    {{ labels(benchmark) | indent(4) }}
-subjects:
-  - kind: ServiceAccount
-    name: {{ benchmark.metadata.name }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: {{ benchmark.metadata.name }}-discovery
-{%- endmacro %}
-
 {% macro discovery_service(benchmark) -%}
 apiVersion: v1
 kind: Service

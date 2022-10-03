@@ -1,6 +1,5 @@
 {% import '_macros.j2' as macros %}
 
-{{ macros.discovery_rbac(benchmark) }}
 ---
 {{ macros.discovery_service(benchmark) }}
 ---
@@ -30,7 +29,6 @@ tasks:
         {%- endif %}
       spec:
         priorityClassName: {{ benchmark.status.priority_class_name }}
-        serviceAccountName: {{ benchmark.metadata.name }}
         {%- if benchmark.spec.host_network %}
         hostNetwork: true
         dnsPolicy: ClusterFirstWithHostNet
@@ -109,7 +107,6 @@ tasks:
         {%- endif %}
       spec:
         priorityClassName: {{ benchmark.status.priority_class_name }}
-        serviceAccountName: {{ benchmark.metadata.name }}
         {%- if benchmark.spec.host_network %}
         hostNetwork: true
         dnsPolicy: ClusterFirstWithHostNet

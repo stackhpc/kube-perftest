@@ -1,0 +1,18 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: BenchmarkSet
+metadata:
+  name: mpi-pingpong-macvlan
+spec:
+  template:
+    apiVersion: perftest.stackhpc.com/v1alpha1
+    kind: MPIPingPong
+    spec:
+      imagePullPolicy: Always
+      hostNetwork: false
+      networkName: default/shared-network
+      resources:
+        limits:
+          rdma/rdma_shared_device_a: 1
+  permutations:
+    product:
+      transport: [TCP, RDMA]
