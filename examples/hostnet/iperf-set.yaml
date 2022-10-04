@@ -10,6 +10,7 @@ spec:
       imagePullPolicy: Always
       hostNetwork: true
       duration: 30
+  repetitions: 5
   permutations:
     product:
       streams: [1, 2, 4, 8, 16, 32, 64, 128]

@@ -1,7 +1,7 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: BenchmarkSet
 metadata:
-  name: mpi-pingpong-accelerated
+  name: mpi-pingpong-cni
 spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1
@@ -9,12 +9,7 @@ spec:
     spec:
       imagePullPolicy: Always
       hostNetwork: false
-      networkName: mlnx-net
-      resources:
-        limits:
-          mellanox.com/mlnxnet: 1
+      # mtu: 9000
+      transport: TCP
       maxlog: 25
   repetitions: 5
-  permutations:
-    product:
-      transport: [TCP, RDMA]

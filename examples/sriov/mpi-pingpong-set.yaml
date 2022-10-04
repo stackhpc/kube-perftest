@@ -13,6 +13,8 @@ spec:
       resources:
         limits:
           nvidia.com/mlnxnet: 1
+      maxlog: 25
+  repetitions: 5
   permutations:
     product:
       transport: [TCP, RDMA]

@@ -480,7 +480,11 @@ async def handle_benchmark_set_created(body, **kwargs):
     benchmark_set = api.BenchmarkSet.parse_obj(body)
     # Update the count before we create anything
     # We can calculate this without producing any permutations
-    benchmark_set.status.count = benchmark_set.spec.permutations.get_count()
+    benchmark_set.status.permutation_count = benchmark_set.spec.permutations.get_count()
+    benchmark_set.status.count = (
+        benchmark_set.status.permutation_count *
+        benchmark_set.spec.repetitions
+    )
     if benchmark_set.status.succeeded is None:
         benchmark_set.status.succeeded = 0
         benchmark_set.status.failed = 0
@@ -489,28 +493,31 @@ async def handle_benchmark_set_created(body, **kwargs):
     # We do this so that benchmarks are ordered by default
     padding_width = math.floor(math.log(benchmark_set.status.count, 10)) + 1
     # Produce the resources for the benchmark set
-    for idx, permutation in enumerate(benchmark_set.spec.permutations.get_permutations()):
-        resource = {
-            "apiVersion": benchmark_set.spec.template.api_version,
-            "kind": benchmark_set.spec.template.kind,
-            "metadata": {
-                # Use a name that is unique to the permutation
-                "name": f"{benchmark_set.metadata.name}-{str(idx + 1).zfill(padding_width)}",
-                "namespace": benchmark_set.metadata.namespace,
-                "ownerReferences": [
-                    {
-                        "apiVersion": benchmark_set.api_version,
-                        "kind": benchmark_set.kind,
-                        "name": benchmark_set.metadata.name,
-                        "uid": benchmark_set.metadata.uid,
-                        "blockOwnerDeletion": True,
-                        "controller": True,
-                    },
-                ]
-            },
-            "spec": utils.mergeconcat(benchmark_set.spec.template.spec, permutation)
-        }
-        _ = await EK_CLIENT.apply_object(resource)
+    idx = 1
+    for permutation in benchmark_set.spec.permutations.get_permutations():
+        for _ in range(benchmark_set.spec.repetitions):
+            resource = {
+                "apiVersion": benchmark_set.spec.template.api_version,
+                "kind": benchmark_set.spec.template.kind,
+                "metadata": {
+                    # Use a name that is unique to the permutation
+                    "name": f"{benchmark_set.metadata.name}-{str(idx).zfill(padding_width)}",
+                    "namespace": benchmark_set.metadata.namespace,
+                    "ownerReferences": [
+                        {
+                            "apiVersion": benchmark_set.api_version,
+                            "kind": benchmark_set.kind,
+                            "name": benchmark_set.metadata.name,
+                            "uid": benchmark_set.metadata.uid,
+                            "blockOwnerDeletion": True,
+                            "controller": True,
+                        },
+                    ]
+                },
+                "spec": utils.mergeconcat(benchmark_set.spec.template.spec, permutation)
+            }
+            _ = await EK_CLIENT.apply_object(resource)
+            idx = idx + 1
 
 
 @kopf.on.update(settings.api_group, api.BenchmarkSet._meta.kind, field = "status.completed")

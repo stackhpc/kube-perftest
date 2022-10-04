@@ -81,6 +81,8 @@ tasks:
               - ucx
               {%- endif %}
               - mpitests-IMB-MPI1
+              - -msglog
+              - "{{ benchmark.spec.maxlog }}"
               - pingpong
             {%- if benchmark.spec.resources %}
             resources:

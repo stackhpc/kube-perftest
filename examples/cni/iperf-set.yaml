@@ -9,8 +9,9 @@ spec:
     spec:
       imagePullPolicy: Always
       hostNetwork: false
-      mtu: 9000
+      # mtu: 9000
       duration: 30
+  repetitions: 5
   permutations:
     product:
       streams: [1, 2, 4, 8, 16, 32, 64, 128]

@@ -17,6 +17,7 @@ spec:
       iterations: 25
       extraArgs:
         - --tclass=96
+  repetitions: 5
   permutations:
     product:
       mode: [read, write]

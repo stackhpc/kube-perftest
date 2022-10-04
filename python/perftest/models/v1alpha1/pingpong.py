@@ -56,6 +56,13 @@ class MPIPingPongSpec(base.BenchmarkSpec):
         MPITransport.TCP,
         description = "The transport to use for the benchmark."
     )
+    maxlog: schema.conint(gt = 0) = Field(
+        22,  # This means up to 4MB messages
+        description = (
+            "Controls the maximum message length for the benchmark. "
+            "Selected lengths, in bytes, will be 0, 1, 2, 4, 8, 16, ..., 2^maxlog."
+        )
+    )
 
 
 class MPIPingPongResult(schema.BaseModel):
@@ -148,6 +155,11 @@ class MPIPingPong(
             "name": "Transport",
             "type": "string",
             "jsonPath": ".spec.transport",
+        },
+        {
+            "name": "Maxlog",
+            "type": "integer",
+            "jsonPath": ".spec.maxlog",
         },
         {
             "name": "Status",

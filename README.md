@@ -85,8 +85,12 @@ spec:
     kind: IPerf
     spec:
       duration: 30
+  # The number of repetitions to run for each permutation
+  # Defaults to 1 if not given
+  repetitions: 1
   # Defines the permutations for the set
   # Each permutation is merged into the spec of the template
+  # If not given, a single permutation consisting of the given template is used
   permutations:
     # Permutations are calculated as a cross-product of the specified names and values
     product:
@@ -138,6 +142,10 @@ metadata:
 spec:
   # The MPI transport to use - one of TCP, RDMA
   transport: TCP
+  # Controls the maximum message length
+  # Selected lengths, in bytes, will be 0, 1, 2, 4, 8, 16, ..., 2^maxlog
+  # Defaults to 22 if not given, meaning the maximum message size will be 4MB
+  maxlog: 22
 ```
 
 ### OpenFOAM
