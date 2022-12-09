@@ -1,0 +1,145 @@
+{% import '_macros.j2' as macros %}
+
+---
+{{ macros.discovery_service(benchmark) }}
+---
+{{ macros.discovery_configmap(benchmark, master = 1, worker = benchmark.spec.num_nodes) }}
+{%- if benchmark.spec.volumeClaimTemplate %}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ benchmark.metadata.name }}-fio-job-pvc
+  labels:
+    {{ macros.labels(benchmark) | indent(4) }}
+  spec:
+    accessModes: {{ "ReadWriteMany" if benchmark.spec.num_workers > 1 else "ReadWriteOnce" }}
+{% endif %}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ benchmark.metadata.name }}-fio-job-config
+  labels:
+    {{ macro.labels(benchmark) | indent(4) }}
+data:
+  job.fio: |
+    [global]
+    bs={{ benchmark.spec.bs }}
+    iodepth={{ benchmark.spec.iodepth }}
+    direct={{ benchmark.spec.direct }}
+    ioengine={{ benchmark.spec.ioengine }}
+    runtime={{ benchmark.spec.runtime }}
+    numjobs={{ benchmark.spec.numjobs }}
+    rw={{ benchmark.spec.rw }}
+    size={{ benchmark.spec.size }}
+    percentage_random={{ benchmark.spec.percentage_random }}
+    rwmixread={{ benchmark.spec.rwmixread }}
+    nrfiles={{ benchmark.spec.nrfiles }}
+    
+    {%- if benchmark.spec.thread %}
+    thread
+    {%- endif %}
+
+    time_based
+    group_reporting
+
+    kb_base=1000
+
+    [{{ benchmark.metadata.name }}]
+    directory=/mnt/benchmark/scratch
+---
+{% call macros.job(benchmark) -%}
+minAvailable: {{ benchmark.spec.num_nodes + 1 }}
+tasks:
+  - name: master
+    replicas: 1
+    policies:
+      # When the master terminates successfully, the job is done
+      - event: TaskCompleted
+        action: CompleteJob
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark, "master") | indent(10) }}
+      spec:
+        priorityClassName: {{ benchmark.status.priority_class_name }}
+        {%- if benchmark.spec.host_network %}
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        {%- endif %}
+        restartPolicy: OnFailure
+        initContainers:
+          - {{ macros.discovery_wait_for_port_init_container(benchmark, benchmark.spec.fio_port, "worker") | indent(12) }}
+        containers:
+          - name: master
+            image: {{ benchmark.spec.image }}
+            imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+            command:
+              - fio-master
+              - /etc/kube-perftest/worker-hosts-fio
+              - /opt/benchmark/job.fio
+            {%- if benchmark.spec.resources %}
+            resources:
+              {{ benchmark.spec.resources | toyaml | indent(14) }}
+            {%- endif %}
+            volumeMounts:
+              - name: fio-job-config
+                mountPath: /opt/benchmark/
+              {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
+        volumes:
+          - name: fio-job-config
+            configMap:
+              name: {{ benchmark.metadata.name }}-fio-job-config
+          - {{ macros.discovery_volume(benchmark) | indent(12) }}
+
+  - name: worker
+    replicas: {{ benchmark.spec.num_nodes }}
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark, "worker") | indent(10) }}
+      spec:
+        priorityClassName: {{ benchmark.status.priority_class_name }}
+        {%- if benchmark.spec.host_network %}
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        {%- endif %}
+        restartPolicy: OnFailure
+        initContainers:
+          - {{ macros.discovery_hosts_init_container(benchmark) | indent(12) }}
+          {{ macros.networking_mtu_init_container(benchmark) | indent(10) }}
+        containers:
+          - name: worker
+            image: {{ benchmark.spec.image }}
+            imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+            env:
+              - name: FIO_PORT
+                value: "{{ benchmark.spec.fio_port }}"
+            ports:
+              - name: fio
+                containerPort: {{ benchmark.spec.fio_port }}
+                protocol: TCP
+            command:
+              - fio-worker
+            {%- if benchmark.spec.resources %}
+            resources:
+              {{ benchmark.spec.resources | toyaml | indent(14) }}
+            {%- endif %}
+            volumeMounts:
+              - name: fio-job-pvc
+                mountPath: /mnt/benchmark/scratch
+              {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
+        volumes:
+          - name: fio-job-pvc
+            persistentVolumeClaim:
+            {%- if benchmark.spec.volumeClaimName %}
+              claimName: {{ benchmark.spec.volumeClaimName }}
+            {%- elif benchmark.spec.volumeClaimTemplate %}
+              claimName: {{ benchmark.metadata.name }}-fio-job-pvc
+            {%- endif %}
+          - {{ macros.discovery_volume(benchmark) | indent(12) }}
+        # The workers should avoid pods from other benchmarks and each other
+        # Max skew of 1 with two workers ensures they will be on separate hosts
+        {{ macros.distribution_spread(benchmark, "worker") | indent(8) }}
+{%- endcall %}

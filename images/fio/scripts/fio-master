@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+worker_hostfile=$1
+fio_jobfile=$2
+
+fio --output-format=json+ --client=${worker_hostfile} ${fio_jobfile}

@@ -36,6 +36,16 @@ data:
     {{ benchmark.metadata.name }}-{{ name }}-{{ idx }}.{{ benchmark.metadata.name }}
 {%- endfor %}
 {%- endfor %}
+{%- if benchmark.spec.template.kind == "Fio" %}
+{%- for name, replicas in kwargs.items() %}
+{%- if name == "worker" %}
+  {{ name }}-hosts-fio: |
+{%- for idx in range(replicas) %}
+    {{ benchmark.metadata.name }}-{{ name }}-{{ idx }}.{{ benchmark.metadata.name }},{{ benchmark.spec.fio_port }}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
   all-hosts: |
 {%- for name, replicas in kwargs.items() %}
 {%- for idx in range(replicas) %}

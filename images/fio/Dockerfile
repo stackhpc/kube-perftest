@@ -1,12 +1,11 @@
-FROM debian:latest
+ARG FEDORA_VERSION=37
+FROM fedora:${FEDORA_VERSION}
 
-ARG FIO_VERSION=3.25-2
-RUN apt-get update && \
-    apt-get install -y tini "fio=$FIO_VERSION" && \
-    rm -rf /var/lib/apt/lists/*
+ARG FIO_VERSION=3.30-2
+ARG FEDORA_VERSION
+RUN dnf install -y fio-${FIO_VERSION}.fc${FEDORA_VERSION} && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
 
 # Install the setup and run scripts
-COPY fio-run.sh /usr/local/bin/fio-run
-
-ENTRYPOINT ["tini", "-g", "--"]
-CMD ["fio-run"]
+COPY scripts/* /usr/local/bin/
