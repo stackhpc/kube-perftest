@@ -3,25 +3,23 @@
 ---
 {{ macros.discovery_service(benchmark) }}
 ---
-{{ macros.discovery_configmap(benchmark, master = 1, worker = benchmark.spec.num_nodes) }}
-{%- if benchmark.spec.volumeClaimTemplate %}
+{{ macros.discovery_configmap(benchmark, master = 1, worker = benchmark.spec.num_workers) }}
 ---
 apiVersion: v1
-kind: PersistentVolume
+kind: PersistentVolumeClaim
 metadata:
-  name: {{ benchmark.metadata.name }}-fio-job-pvc
+  name: {{ benchmark.metadata.name }}-fio-scratch-pvc
   labels:
     {{ macros.labels(benchmark) | indent(4) }}
-  spec:
-    accessModes: {{ "ReadWriteMany" if benchmark.spec.num_workers > 1 else "ReadWriteOnce" }}
-{% endif %}
+spec:
+  {{ benchmark.spec.volume_claim_template | toyaml | indent(2) }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ benchmark.metadata.name }}-fio-job-config
   labels:
-    {{ macro.labels(benchmark) | indent(4) }}
+    {{ macros.labels(benchmark) | indent(4) }}
 data:
   job.fio: |
     [global]
@@ -30,7 +28,7 @@ data:
     direct={{ benchmark.spec.direct }}
     ioengine={{ benchmark.spec.ioengine }}
     runtime={{ benchmark.spec.runtime }}
-    numjobs={{ benchmark.spec.numjobs }}
+    numjobs={{ benchmark.spec.num_jobs }}
     rw={{ benchmark.spec.rw }}
     size={{ benchmark.spec.size }}
     percentage_random={{ benchmark.spec.percentage_random }}
@@ -42,17 +40,16 @@ data:
     {%- endif %}
 
     time_based
-    group_reporting
-
-    kb_base=1000
+    #group_reporting
 
     [{{ benchmark.metadata.name }}]
     directory=/mnt/benchmark/scratch
 ---
 {% call macros.job(benchmark) -%}
-minAvailable: {{ benchmark.spec.num_nodes + 1 }}
+minAvailable: {{ benchmark.spec.num_workers + 1 }}
 tasks:
   - name: master
+    # Runs Fio client
     replicas: 1
     policies:
       # When the master terminates successfully, the job is done
@@ -76,9 +73,12 @@ tasks:
             image: {{ benchmark.spec.image }}
             imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
             command:
-              - fio-master
-              - /etc/kube-perftest/worker-hosts-fio
-              - /opt/benchmark/job.fio
+              - "/bin/bash"
+              - "-c"
+              - "sleep 6000"
+              #- fio-master
+              #- /etc/kube-perftest/worker-hosts-fio
+              #- /opt/benchmark/job.fio
             {%- if benchmark.spec.resources %}
             resources:
               {{ benchmark.spec.resources | toyaml | indent(14) }}
@@ -92,9 +92,12 @@ tasks:
             configMap:
               name: {{ benchmark.metadata.name }}-fio-job-config
           - {{ macros.discovery_volume(benchmark) | indent(12) }}
+        # The master should avoid pods from other benchmarks
+        {{ macros.distribution_spread(benchmark, "master") | indent(8) }}
 
   - name: worker
-    replicas: {{ benchmark.spec.num_nodes }}
+    # Runs Fio server
+    replicas: {{ benchmark.spec.num_workers }}
     template:
       metadata:
         labels:
@@ -127,17 +130,13 @@ tasks:
               {{ benchmark.spec.resources | toyaml | indent(14) }}
             {%- endif %}
             volumeMounts:
-              - name: fio-job-pvc
+              - name: fio-scratch-pvc
                 mountPath: /mnt/benchmark/scratch
               {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
         volumes:
-          - name: fio-job-pvc
+          - name: fio-scratch-pvc
             persistentVolumeClaim:
-            {%- if benchmark.spec.volumeClaimName %}
-              claimName: {{ benchmark.spec.volumeClaimName }}
-            {%- elif benchmark.spec.volumeClaimTemplate %}
-              claimName: {{ benchmark.metadata.name }}-fio-job-pvc
-            {%- endif %}
+              claimName: {{ benchmark.metadata.name }}-fio-scratch-pvc
           - {{ macros.discovery_volume(benchmark) | indent(12) }}
         # The workers should avoid pods from other benchmarks and each other
         # Max skew of 1 with two workers ensures they will be on separate hosts

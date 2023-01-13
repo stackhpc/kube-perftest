@@ -228,3 +228,23 @@ spec:
   extraArgs:
     - --tclass=96
 ```
+
+## Operator development
+
+```
+# Install dependencies in a virtual environment
+python3 -m venv venv
+source venv/bin/activate
+pip install -U pip
+pip install -r python/requirements.txt
+pip install -e python
+
+# Set the default image tag
+export KUBE_PERFTEST__DEFAULT_IMAGE_TAG=<dev branch name>
+
+# Set the default image pull policy
+export KUBE_PERFTEST__DEFAULT_IMAGE_PULL_POLICY=Always
+
+# Run the operator
+kopf run -m perftest.operator -A
+```

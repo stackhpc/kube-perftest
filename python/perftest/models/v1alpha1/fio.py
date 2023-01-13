@@ -47,9 +47,13 @@ class FioSpec(base.BenchmarkSpec):
         base.ImagePullPolicy.IF_NOT_PRESENT,
         description = "The pull policy for the image."
     )
-    fio_port: schema.conint(gt = 0) = Field(
+    fio_port: schema.conint(ge = 1024) = Field(
         8765,
         description = "The port that the Fio sever listens on."
+    )
+    volume_claim_template: schema.Dict[str, t.Any] = Field(
+        default_factory = dict,
+        description = "The template that describes the PVC to mount on workers."
     )
     num_workers: schema.conint(gt = 0) = Field(
         1,
@@ -60,7 +64,7 @@ class FioSpec(base.BenchmarkSpec):
         FioRW.READ,
         description = "The value of the Fio rw config option."
     )
-    bs: schema.constr(regex = "\\d+(K|M|G|T|P)?") = Field(
+    bs: constr(regex = "\\d+(K|M|G|T|P)?") = Field(
         "4M",
         description = "The value of the Fio bs config option."
     )
@@ -92,15 +96,15 @@ class FioSpec(base.BenchmarkSpec):
         FioIOEngine.LIBAIO,
         description = "The value of the Fio ioengine config option."
     )
-    runtime: schema.constr(regex = "\\d+(D|H|M|s|ms|us)?") = Field(
-        30,
+    runtime: constr(regex = "\\d+(D|H|M|s|ms|us)?") = Field(
+        "30s",
         description = "The value of the Fio runtime config option."
     )
-    numjobs: schema.conint(gt = 0) = Field(
+    num_jobs: schema.conint(gt = 0) = Field(
         1,
         description = "The value of the Fio numjobs config option."
     )
-    size: schema.constr(regex = "\\d+(K|M|G|T|P)?") = Field(
+    size: constr(regex = "\\d+(K|M|G|T|P)?") = Field(
         "10G",
         description = "The value of the Fio size config option."
     )

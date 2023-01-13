@@ -36,7 +36,7 @@ data:
     {{ benchmark.metadata.name }}-{{ name }}-{{ idx }}.{{ benchmark.metadata.name }}
 {%- endfor %}
 {%- endfor %}
-{%- if benchmark.spec.template.kind == "Fio" %}
+{%- if benchmark.kind == "Fio" %}
 {%- for name, replicas in kwargs.items() %}
 {%- if name == "worker" %}
   {{ name }}-hosts-fio: |
@@ -64,7 +64,7 @@ args:
   - -c
   - |
       set -e
-      until [ -s /etc/kube-perftest/hosts ]; do
+      until [ -s /etc/kube-perftest/all-hosts ]; do
         echo "waiting for hosts file to become available"
         sleep 1
       done
@@ -78,11 +78,21 @@ volumeMounts:
 name: wait-for-{{ component }}-port-{{ port }}
 image: {{ settings.discovery_container_image }}
 imagePullPolicy: {{ benchmark.spec.image_pull_policy | default(settings.default_image_pull_policy) }}
+securityContext:
+  privileged: true
 args:
   - bash
   - -c
   - |
       set -e
+
+      # containerd bind mounts /etc/hosts, so unmount it and
+      # symlink our version
+      if [ ! -s /etc/hosts ]; then
+        umount /etc/hosts
+        ln -sf /etc/kube-perftest/hosts /etc/hosts
+      fi
+
       while read host; do
         if [ -z "$host" ]; then
           continue

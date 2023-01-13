@@ -1,0 +1,33 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: BenchmarkSet
+metadata:
+  name: fio-cni
+spec:
+  template:
+    apiVersion: perftest.stackhpc.com/v1alpha1
+    kind: Fio
+    spec:
+      direct: 1
+      imagePullPolicy: Always
+      iodepth: 8
+      ioengine: libaio
+      nrfiles: 1
+      numWorkers: 1
+      percentageRandom: 0
+      runtime: 10s
+      rw: read
+      rwmixread: 0
+      size: 100M
+      thread: false
+      hostNetwork: false
+      volumeClaimTemplate:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Gi
+  permutations:
+    product:
+      numJobs: [4]
+      rw: ['read']
+      bs: ['32k']
