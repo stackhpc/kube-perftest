@@ -1,7 +1,7 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: BenchmarkSet
 metadata:
-  name: fio-default-sc
+  name: fio-hostpath
 spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1

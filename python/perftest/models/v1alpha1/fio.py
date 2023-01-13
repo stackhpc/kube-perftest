@@ -1,3 +1,4 @@
+import itertools as it
 import json
 import re
 import typing as t
@@ -167,6 +168,10 @@ class FioStatus(base.BenchmarkStatus):
         default_factory = dict,
         description = "Pod information for the worker pods, indexed by pod name."
     )
+    client_log: t.Optional[constr(min_length = 1)] = Field(
+        None,
+        description = "The raw pod log of the client pod."
+    )
 
 class Fio(
     base.Benchmark,
@@ -188,12 +193,17 @@ class Fio(
             "jsonPath": ".spec.rw",
         },
         {
-            "name": "RWMIXREAD",
+            "name": "BS",
+            "type": "string",
+            "jsonPath": ".spec.bs",
+        },
+        {
+            "name": "Pct Read",
             "type": "string",
             "jsonPath": ".spec.rwmixread",
         },
         {
-            "name": "PCT RANDOM",
+            "name": "Pct Random",
             "type": "string",
             "jsonPath": ".spec.percentageRandom",
         },
@@ -259,44 +269,29 @@ class Fio(
             else:
                 self.status.worker_pods[pod["metadata"]["name"]] = base.PodInfo.from_pod(pod)
         elif pod_phase == "Succeeded":
-            pod_log = await fetch_pod_log()
-            
-            # Extract the benchmark info from the pod log
-            read_bw = None
-            read_iops = None
-            read_lat_ns_mean = None
-            read_lat_ns_stddev = None
-            write_bw = None
-            write_iops = None
-            write_lat_ns_mean = None
-            write_lat_ns_stddev = None
-
-            fio_json = json.loads(pod_log[pod_log.find("{"):])
-
-            aggregate_data = [i for i in fio_json['client_stats'] if i['jobname'] == 'All clients'][0]
-            read_bw = aggregate_data['read']['bw']
-            read_iops = aggregate_data['read']['iops']
-            read_lat_ns_mean = aggregate_data['read']['lat_ns']['mean']
-            read_lat_ns_stddev = aggregate_data['read']['lat_ns']['stddev']
-            write_bw = aggregate_data['write']['bw']
-            write_iops = aggregate_data['write']['iops']
-            write_lat_ns_mean = aggregate_data['write']['lat_ns']['mean']
-            write_lat_ns_stddev = aggregate_data['write']['lat_ns']['stddev']
-
-            self.status.result = FioResult(
-                read_bw = read_bw,
-                read_iops = read_iops,
-                read_lat_ns_mean = read_lat_ns_mean,
-                read_lat_ns_stddev = read_lat_ns_stddev,
-                write_bw = write_bw,
-                write_iops = write_iops,
-                write_lat_ns_mean = write_lat_ns_mean,
-                write_lat_ns_stddev = write_lat_ns_stddev
-            )
+            self.status.client_log = await fetch_pod_log()
 
     def summarise(self):
-        """
-        Update the status of this benchmark with overall results.
-        """
-        if not self.status.result:
+        # If the client log has not yet been recorded, bail
+        if not self.status.client_log:
             raise PodResultsIncompleteError("master pod has not recorded a result yet")
+        # Compute the result from the client log
+        # Drop the lines from the log until we reach the start of the results
+        try:
+            json_lines = it.dropwhile(lambda l: re.match(r"^{", l) is None, self.status.client_log.splitlines())
+            fio_json = json.loads("\n".join(json_lines))
+        except:
+            raise PodLogFormatError("pod log is not of the expected format")
+
+        aggregate_data = [i for i in fio_json['client_stats'] if i['jobname'] == 'All clients'][0]
+
+        self.status.result = FioResult(
+            read_bw = aggregate_data['read']['bw'] * 1024 / 1e6,
+            read_iops = aggregate_data['read']['iops'],
+            read_lat_ns_mean = aggregate_data['read']['lat_ns']['mean'],
+            read_lat_ns_stddev = aggregate_data['read']['lat_ns']['stddev'],
+            write_bw = aggregate_data['write']['bw'] * 1024 / 1e6,
+            write_iops = aggregate_data['write']['iops'],
+            write_lat_ns_mean = aggregate_data['write']['lat_ns']['mean'],
+            write_lat_ns_stddev = aggregate_data['write']['lat_ns']['stddev']
+        )
