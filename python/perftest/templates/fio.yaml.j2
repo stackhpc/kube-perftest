@@ -73,12 +73,9 @@ tasks:
             image: {{ benchmark.spec.image }}
             imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
             command:
-              - "/bin/bash"
-              - "-c"
-              - "sleep 6000"
-              #- fio-master
-              #- /etc/kube-perftest/worker-hosts-fio
-              #- /opt/benchmark/job.fio
+              - fio-master
+              - /etc/kube-perftest/worker-hosts-fio
+              - /opt/benchmark/job.fio
             {%- if benchmark.spec.resources %}
             resources:
               {{ benchmark.spec.resources | toyaml | indent(14) }}
