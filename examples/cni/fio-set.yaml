@@ -16,7 +16,7 @@ spec:
       percentageRandom: 0
       runtime: 10s
       rw: read
-      rwmixread: 0
+      rwmixread: 50
       size: 100M
       thread: false
       hostNetwork: false
@@ -29,5 +29,5 @@ spec:
   permutations:
     product:
       numJobs: [4]
-      rw: ['read']
+      rw: ['read', "write", "randrw"]
       bs: ['32k']

@@ -173,14 +173,29 @@ class Fio(
     subresources = {"status": {}},
     printer_columns = [
         {
-            "name": "Num Procs",
+            "name": "Num Jobs",
             "type": "integer",
-            "jsonPath": ".spec.numProcs",
+            "jsonPath": ".spec.numJobs",
         },
         {
-            "name": "Num Nodes",
+            "name": "Num Workers",
             "type": "integer",
-            "jsonPath": ".spec.numNodes",
+            "jsonPath": ".spec.numWorkers",
+        },
+        {
+            "name": "RW",
+            "type": "string",
+            "jsonPath": ".spec.rw",
+        },
+        {
+            "name": "RWMIXREAD",
+            "type": "string",
+            "jsonPath": ".spec.rwmixread",
+        },
+        {
+            "name": "PCT RANDOM",
+            "type": "string",
+            "jsonPath": ".spec.percentageRandom",
         },
         {
             "name": "Status",
@@ -200,22 +215,22 @@ class Fio(
         {
             "name": "Read Bandwidth",
             "type": "number",
-            "jsonPath": ".status.result.read_bw",
+            "jsonPath": ".status.result.readBw",
         },
         {
             "name": "Read IOPS",
             "type": "number",
-            "jsonPath": ".status.result.read_iops",
+            "jsonPath": ".status.result.readIops",
         },
         {
             "name": "Write Bandwidth",
             "type": "number",
-            "jsonPath": ".status.result.write_bw",
+            "jsonPath": ".status.result.writeBw",
         },
         {
             "name": "Write IOPS",
             "type": "number",
-            "jsonPath": ".status.result.write_iops",
+            "jsonPath": ".status.result.writeIops",
         }
     ]
 ):
@@ -256,20 +271,17 @@ class Fio(
             write_lat_ns_mean = None
             write_lat_ns_stddev = None
 
-            try:
-                fio_json = json.load(pod_log)
-                aggregate_data = [i for i in fio_json['client_stats'] if i['jobname'] == 'All clients'][0]
-                read_bw = aggregate_data['read']['bw']
-                read_iops = aggregate_data['read']['iops']
-                read_lat_ns_mean = aggregate_data['read']['lat_ns']['mean']
-                read_lat_ns_stddev = aggregate_data['read']['lat_ns']['stddev']
-                write_bw = aggregate_data['write']['bw']
-                write_iops = aggregate_data['write']['iops']
-                write_lat_ns_mean = aggregate_data['write']['lat_ns']['mean']
-                write_lat_ns_stddev = aggregate_data['write']['lat_ns']['stddev']
-           
-            except:
-                PodLogFormatError("unable to parse Fio output JSON from pod log")
+            fio_json = json.loads(pod_log[pod_log.find("{"):])
+
+            aggregate_data = [i for i in fio_json['client_stats'] if i['jobname'] == 'All clients'][0]
+            read_bw = aggregate_data['read']['bw']
+            read_iops = aggregate_data['read']['iops']
+            read_lat_ns_mean = aggregate_data['read']['lat_ns']['mean']
+            read_lat_ns_stddev = aggregate_data['read']['lat_ns']['stddev']
+            write_bw = aggregate_data['write']['bw']
+            write_iops = aggregate_data['write']['iops']
+            write_lat_ns_mean = aggregate_data['write']['lat_ns']['mean']
+            write_lat_ns_stddev = aggregate_data['write']['lat_ns']['stddev']
 
             self.status.result = FioResult(
                 read_bw = read_bw,
