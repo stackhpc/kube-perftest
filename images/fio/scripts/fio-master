@@ -5,4 +5,7 @@ set -euo pipefail
 worker_hostfile=$1
 fio_jobfile=$2
 
-fio --output-format=json --client=${worker_hostfile} ${fio_jobfile}
+# Don't buffer stdout to make sure that fio writes its complete log
+# before the process exits and the container is killed
+stdbuf -o 0 \
+fio --output-format=json+ --client=${worker_hostfile} ${fio_jobfile}
