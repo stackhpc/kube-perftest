@@ -286,11 +286,11 @@ class Fio(
         aggregate_data = [i for i in fio_json['client_stats'] if i['jobname'] == 'All clients'][0]
 
         self.status.result = FioResult(
-            read_bw = aggregate_data['read']['bw'] * 1024 / 1e6,
+            read_bw = aggregate_data['read']['bw'],
             read_iops = aggregate_data['read']['iops'],
             read_lat_ns_mean = aggregate_data['read']['lat_ns']['mean'],
             read_lat_ns_stddev = aggregate_data['read']['lat_ns']['stddev'],
-            write_bw = aggregate_data['write']['bw'] * 1024 / 1e6,
+            write_bw = aggregate_data['write']['bw'],
             write_iops = aggregate_data['write']['iops'],
             write_lat_ns_mean = aggregate_data['write']['lat_ns']['mean'],
             write_lat_ns_stddev = aggregate_data['write']['lat_ns']['stddev']
