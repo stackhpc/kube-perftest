@@ -4,6 +4,7 @@
 {{ macros.discovery_service(benchmark) }}
 ---
 {{ macros.discovery_configmap(benchmark, master = 1, worker = benchmark.spec.num_workers) }}
+{% if benchmark.spec.volume_claim_template.access_modes and 'ReadWriteMany' in benchmark.spec.volume_claim_template.access_modes %}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -13,6 +14,7 @@ metadata:
     {{ macros.labels(benchmark) | indent(4) }}
 spec:
   {{ benchmark.spec.volume_claim_template | toyaml | indent(2) }}
+{% endif %}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -40,7 +42,6 @@ data:
     {%- endif %}
 
     time_based
-    #group_reporting
 
     [{{ benchmark.metadata.name }}]
     directory=/mnt/benchmark/scratch
@@ -131,9 +132,17 @@ tasks:
                 mountPath: /mnt/benchmark/scratch
               {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
         volumes:
+          {% if benchmark.spec.volume_claim_template.access_modes and 'ReadWriteMany' in benchmark.spec.volume_claim_template.access_modes %}
           - name: fio-scratch-pvc
             persistentVolumeClaim:
               claimName: {{ benchmark.metadata.name }}-fio-scratch-pvc
+          {% else %}
+          - name: fio-scratch-pvc
+            ephemeral:
+              volumeClaimTemplate:
+                spec:
+                  {{ benchmark.spec.volume_claim_template | toyaml | indent(18) }}
+          {% endif %}
           - {{ macros.discovery_volume(benchmark) | indent(12) }}
         # The workers should avoid pods from other benchmarks and each other
         # Max skew of 1 with two workers ensures they will be on separate hosts
