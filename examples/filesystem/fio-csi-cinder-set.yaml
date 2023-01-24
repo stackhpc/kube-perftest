@@ -1,7 +1,7 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: BenchmarkSet
 metadata:
-  name: fio-hostpath
+  name: fio-csi-cinder
 spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1
@@ -23,11 +23,12 @@ spec:
       volumeClaimTemplate:
         accessModes:
           - ReadWriteOnce
+        storageClassName: csi-cinder
         resources:
           requests:
             storage: 5Gi
   permutations:
     product:
+      numWorkers: [2,4]
       numJobs: [2,4]
-      rw: ['read', "write", "randrw", "rw,readwrite"]
-      bs: ['32k', '1M', '4M']
+      bs: ['1M', '4M']

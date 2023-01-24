@@ -1,7 +1,7 @@
 apiVersion: perftest.stackhpc.com/v1alpha1
 kind: BenchmarkSet
 metadata:
-  name: fio-default-sc
+  name: fio-local-path
 spec:
   template:
     apiVersion: perftest.stackhpc.com/v1alpha1
@@ -21,6 +21,7 @@ spec:
       thread: false
       hostNetwork: false
       volumeClaimTemplate:
+        storageClassName: local-path
         accessModes:
           - ReadWriteOnce
         resources:
