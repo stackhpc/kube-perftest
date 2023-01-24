@@ -4,7 +4,7 @@
 {{ macros.discovery_service(benchmark) }}
 ---
 {{ macros.discovery_configmap(benchmark, master = 1, worker = benchmark.spec.num_workers) }}
-{% if benchmark.spec.volume_claim_template.access_modes and 'ReadWriteMany' in benchmark.spec.volume_claim_template.access_modes %}
+{% if benchmark.spec.volume_claim_template.accessModes and 'ReadWriteMany' in benchmark.spec.volume_claim_template.accessModes %}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -132,7 +132,7 @@ tasks:
                 mountPath: /mnt/benchmark/scratch
               {{ macros.discovery_volume_mounts(benchmark) | indent(14) }}
         volumes:
-          {% if benchmark.spec.volume_claim_template.access_modes and 'ReadWriteMany' in benchmark.spec.volume_claim_template.access_modes %}
+          {% if benchmark.spec.volume_claim_template.accessModes and 'ReadWriteMany' in benchmark.spec.volume_claim_template.accessModes %}
           - name: fio-scratch-pvc
             persistentVolumeClaim:
               claimName: {{ benchmark.metadata.name }}-fio-scratch-pvc
