@@ -12,3 +12,6 @@ fio_jobfile=$2
 # https://github.com/axboe/fio/issues/731#issuecomment-871259173
 
 stdbuf -o0 -e0 fio --client=${worker_hostfile} ${fio_jobfile} --output-format=json+
+
+# Add a sleep to make sure buffers are flushed
+sleep 2
