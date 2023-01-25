@@ -276,10 +276,8 @@ class Fio(
         if not self.status.client_log:
             raise PodResultsIncompleteError("master pod has not recorded a result yet")
         # Compute the result from the client log
-        # Drop the lines from the log until we reach the start of the results
         try:
-            json_lines = it.dropwhile(lambda l: re.match(r"^{", l) is None, self.status.client_log.splitlines())
-            fio_json = json.loads("\n".join(json_lines))
+            fio_json = json.loads(self.status.client_log)
         except:
             raise PodLogFormatError("pod log is not of the expected format")
 
