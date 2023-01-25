@@ -64,7 +64,7 @@ args:
   - -c
   - |
       set -e
-      until [ -s /etc/kube-perftest/all-hosts ]; do
+      until [ -s /etc/kube-perftest/hosts ]; do
         echo "waiting for hosts file to become available"
         sleep 1
       done
