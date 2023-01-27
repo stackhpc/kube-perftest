@@ -78,19 +78,50 @@ volumeMounts:
 name: wait-for-{{ component }}-port-{{ port }}
 image: {{ settings.discovery_container_image }}
 imagePullPolicy: {{ benchmark.spec.image_pull_policy | default(settings.default_image_pull_policy) }}
-securityContext:
-  privileged: true
 args:
   - bash
   - -c
   - |
       set -e
-
-      # containerd bind mounts /etc/hosts, so unmount it and
-      # symlink our version
+      
+      # Make sure that /etc/hosts both gets populated with benchmark pod IPs
+      # and mounted correctly before checking port liveness. 
+      # If /etc/hosts is mounted before it is populated, it can stay empty 
+      # despite it's underlying configMap being populated asynchronously.
+      # The logic here is:
+      # 1. If /etc/hosts is empty, wait for all of the pods participating in
+      #    the benchmark to be populated in /etc/kube-perftest/hosts. When all
+      #    pod IPs are available in /etc/kube-perftest/hosts, exit 1 to allow
+      #    Kubelet to restart the container and remount a fully populated
+      #    /etc/hosts.
+      # 2. If /etc/hosts is not empty, check that a record is present for 
+      #    every pod participating in the benchmark, and exit 1 if a
+      #    record for a pod is not found.
+      
       if [ ! -s /etc/hosts ]; then
-        umount /etc/hosts
-        ln -sf /etc/kube-perftest/hosts /etc/hosts
+        echo "/etc/hosts is empty, waiting for hosts to be populated..."
+        
+        while read host; do
+          until grep -q "${host}" /etc/kube-perftest/hosts; do
+            sleep 1
+          done
+          echo "IP populated for ${host}" 
+        done < /etc/kube-perftest/all-hosts
+        
+        echo "All hosts populated, exiting to ensure /etc/hosts is mounted correctly."
+        
+        exit 1
+      else
+        echo "Checking for all benchmark hosts in /etc/hosts"
+        
+        while read host; do
+          if ! grep -q "${host}" /etc/hosts; then
+            echo "No record for ${host} in /etc/hosts, quitting."
+            exit 1
+          else
+            echo "Found ${host} in /etc/hosts, continuing..."
+          fi
+        done < /etc/kube-perftest/all-hosts
       fi
 
       while read host; do
