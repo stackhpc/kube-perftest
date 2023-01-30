@@ -100,6 +100,10 @@ tasks:
       metadata:
         labels:
           {{ macros.labels(benchmark, "worker") | indent(10) }}
+        {%- if not benchmark.spec.host_network and benchmark.spec.network_name %}
+        annotations:
+          v1.multus-cni.io/default-network: {{ benchmark.spec.network_name }}
+        {%- endif %}
       spec:
         priorityClassName: {{ benchmark.status.priority_class_name }}
         {%- if benchmark.spec.host_network %}
