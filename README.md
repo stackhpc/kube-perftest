@@ -229,6 +229,57 @@ spec:
     - --tclass=96
 ```
 
+### Filesystem performance characteristics
+
+Runs filesystem performance benchmarking using [fio](https://fio.readthedocs.io). All
+available `spec` options are given below. Fio configration options match broadly with
+those defined in the fio documentation.
+
+Setting `.spec.volumeClaimTemplate` allows the provision of stable storage using 
+`PersistentVolumes` provisioned by a [`PersistentVolume`](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+Provisioner.
+
+When `spec.volumeClaimTemplate.accessModes` contains `ReadWriteMany`, this benchmark
+will create a single `PersistentVolume` per `BenchmarkSet` iteration, and attach all
+worker pods participting in the set (equal to `spec.numWorkers`) to the same volume.
+Otherwise, a `PersistentVolume` per-pod is created and attached to each worker pod
+participating in the benchmark.
+
+```yaml
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: Fio
+metadata:
+  name: fio-filesystem
+spec:
+  # fio benchmark configuration options
+  direct: 1
+  iodepth: 8
+  ioengine: libaio
+  nrfiles: 1
+  numJobs: 1
+  bs: 1M
+  rw: read
+  percentageRandom: 100
+  runtime: 10s
+  rwmixread: 50
+  size: 1G
+
+  # kube-perftest benchmark configuration
+  # options
+  numWorkers: 1
+  thread: false
+  hostNetwork: false
+
+  # PersistentVolume configuration options
+  volumeClaimTemplate:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: csi-cinder
+    resources:
+      requests:
+        storage: 5Gi
+```
+
 ## Operator development
 
 ```
