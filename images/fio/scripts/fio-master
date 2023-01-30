@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+worker_hostfile=$1
+fio_jobfile=$2
+
+# Don't buffer stdout or stderr to make sure that fio writes its complete log
+# before the process exits and the container is killed
+
+# Moving output-format to the end of the command cleans up json output?
+# https://github.com/axboe/fio/issues/731#issuecomment-871259173
+
+stdbuf -o0 -e0 fio --client=${worker_hostfile} ${fio_jobfile} --output-format=json+
+
+# Add a sleep to make sure buffers are flushed
+sleep 2

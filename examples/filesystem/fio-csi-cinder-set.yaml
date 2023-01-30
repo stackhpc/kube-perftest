@@ -1,0 +1,34 @@
+apiVersion: perftest.stackhpc.com/v1alpha1
+kind: BenchmarkSet
+metadata:
+  name: fio-csi-cinder
+spec:
+  template:
+    apiVersion: perftest.stackhpc.com/v1alpha1
+    kind: Fio
+    spec:
+      direct: 1
+      imagePullPolicy: Always
+      iodepth: 8
+      ioengine: libaio
+      nrfiles: 1
+      numWorkers: 1
+      percentageRandom: 100
+      runtime: 10s
+      rw: read
+      rwmixread: 50
+      size: 1G
+      thread: false
+      hostNetwork: false
+      volumeClaimTemplate:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: csi-cinder
+        resources:
+          requests:
+            storage: 5Gi
+  permutations:
+    product:
+      numWorkers: [2,4]
+      numJobs: [2,4]
+      bs: ['1M', '4M']
