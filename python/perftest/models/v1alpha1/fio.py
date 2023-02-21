@@ -281,7 +281,12 @@ class Fio(
         except:
             raise PodLogFormatError("pod log is not of the expected format")
 
-        aggregate_data = [i for i in fio_json['client_stats'] if i['jobname'] == 'All clients'][0]
+        if len(fio_json['client_stats']) == 1:
+            # Single worker, single process doesn't have an
+            # 'All clients' log section
+            aggregate_data = fio_json['client_stats'][0]
+        else:
+            aggregate_data = [i for i in fio_json['client_stats'] if i['jobname'] == 'All clients'][0]
 
         self.status.result = FioResult(
             read_bw = aggregate_data['read']['bw'],
