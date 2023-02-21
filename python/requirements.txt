@@ -1,4 +1,4 @@
-aiohttp==3.8.1
+aiohttp==3.8.2
 aiosignal==1.2.0
 anyio==3.6.1
 async-timeout==4.0.2
@@ -15,10 +15,10 @@ httpx==0.23.0
 idna==3.3
 iso8601==1.0.2
 Jinja2==3.1.2
-kopf==1.35.6
+kopf==1.36.0
 kube-custom-resource @ git+https://github.com/stackhpc/kube-custom-resource.git@851b1bf25fecdbc180e73494eb77c7899274ee15
 MarkupSafe==2.1.1
-multidict==6.0.2
+multidict==5.2.0
 pydantic==1.10.1
 python-json-logger==2.0.4
 PyYAML==6.0
