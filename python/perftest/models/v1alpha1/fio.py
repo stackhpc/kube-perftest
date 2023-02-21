@@ -9,6 +9,7 @@ from kube_custom_resource import schema
 
 from ...config import settings
 from ...errors import PodLogFormatError, PodResultsIncompleteError
+from ...utils import format_amount
 
 from . import base
 
@@ -160,6 +161,22 @@ class FioStatus(base.BenchmarkStatus):
         None,
         description = "The result of the benchmark."
     )
+    read_bw_result: t.Optional[schema.IntOrString] = Field(
+        None,
+        description = "The summary result for read bw, used for display."
+    )
+    write_bw_result: t.Optional[schema.IntOrString] = Field(
+        None,
+        description = "The summary result for write bw, used for display."
+    )
+    read_iops_result: t.Optional[schema.confloat(ge = 0)] = Field(
+        None,
+        description = "The summary result for read IOPs, used for display."
+    )
+    write_iops_result: t.Optional[schema.confloat(ge = 0)] = Field(
+        None,
+        description = "The summary result for write IOPs, used for display."
+    )
     master_pod: t.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the Fio master pod."
@@ -224,23 +241,23 @@ class Fio(
         },
         {
             "name": "Read Bandwidth",
-            "type": "number",
-            "jsonPath": ".status.result.readBw",
+            "type": "string",
+            "jsonPath": ".status.readBwResult",
         },
         {
             "name": "Read IOPS",
             "type": "number",
-            "jsonPath": ".status.result.readIops",
+            "jsonPath": ".status.readIopsResult",
         },
         {
             "name": "Write Bandwidth",
-            "type": "number",
-            "jsonPath": ".status.result.writeBw",
+            "type": "string",
+            "jsonPath": ".status.writeBwResult",
         },
         {
             "name": "Write IOPS",
             "type": "number",
-            "jsonPath": ".status.result.writeIops",
+            "jsonPath": ".status.writeIopsResult",
         }
     ]
 ):
@@ -288,6 +305,13 @@ class Fio(
         else:
             aggregate_data = [i for i in fio_json['client_stats'] if i['jobname'] == 'All clients'][0]
 
+        # Format results nicely for printing
+        self.status.read_bw_result = "{0} {1}B/s".format(*format_amount(aggregate_data['read']['bw'], "K"))
+        self.status.write_bw_result = "{0} {1}B/s".format(*format_amount(aggregate_data['write']['bw'], "K"))
+        self.status.write_iops_result = round(aggregate_data['write']['iops'], 2)
+        self.status.read_iops_result = round(aggregate_data['read']['iops'], 2)
+
+        # Use unformatted data for full fioresult
         self.status.result = FioResult(
             read_bw = aggregate_data['read']['bw'],
             read_iops = aggregate_data['read']['iops'],
