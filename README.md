@@ -12,6 +12,8 @@
   - [OpenFOAM](#openfoam)
   - [RDMA Bandwidth](#rdma-bandwidth)
   - [RDMA Latency](#rdma-latency)
+  - [fio](#fio)
+- [Operator development](#operator-development)
 
 ## Installation
 
@@ -229,11 +231,12 @@ spec:
     - --tclass=96
 ```
 
-### Filesystem performance characteristics
+### fio
 
-Runs filesystem performance benchmarking using [fio](https://fio.readthedocs.io). All
-available `spec` options are given below. Fio configration options match broadly with
-those defined in the fio documentation.
+Runs filesystem performance benchmarking using [fio](https://fio.readthedocs.io) to
+determine filesystem performance characteristics. All available `spec` options are
+given below. Fio configration options match broadly with those defined in the fio
+documentation.
 
 Setting `.spec.volumeClaimTemplate` allows the provision of stable storage using 
 `PersistentVolumes` provisioned by a [`PersistentVolume`](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
@@ -287,7 +290,6 @@ spec:
 python3 -m venv venv
 source venv/bin/activate
 pip install -U pip
-pip install -r python/requirements.txt
 pip install -e python
 
 # Set the default image tag
