@@ -25,6 +25,7 @@ rules:
       - openfoams.perftest.stackhpc.com
       - rdmabandwidths.perftest.stackhpc.com
       - rdmalatencies.perftest.stackhpc.com
+      - fios.perftest.stackhpc.com
     verbs:
       - update
       - patch
@@ -73,14 +74,23 @@ rules:
       - services
     verbs:
       - "*"
-  # We need to be able to watch pods and fetch their logs
+  # We need to be able to watch endpoints and pod logs
   - apiGroups:
       - ""
     resources:
       - endpoints
-      - pods
       - pods/log
     verbs:
       - list
       - get
       - watch
+  # We need to be able to watch and update pods
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - list
+      - get
+      - watch
+      - patch
