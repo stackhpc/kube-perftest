@@ -2,9 +2,10 @@
 # Dockerfile for the iperf benchmarks
 #####
 
-FROM debian:latest
 
-ARG IPERF_VERSION=2.0.14a+dfsg1-1
+FROM debian:bookworm-slim
+
+ARG IPERF_VERSION=2.1.8+dfsg-1
 RUN apt-get update && \
     apt-get install -y "iperf=$IPERF_VERSION" && \
     rm -rf /var/lib/apt/lists/*

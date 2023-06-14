@@ -1,11 +1,13 @@
-ARG FEDORA_VERSION=37
-FROM fedora:${FEDORA_VERSION}
+#####
+# Dockerfile for the fio benchmarks
+#####
 
-ARG FIO_VERSION=3.30-2
-ARG FEDORA_VERSION
-RUN dnf install -y tini fio-${FIO_VERSION}.fc${FEDORA_VERSION} && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf
+FROM debian:bookworm-slim
+
+ARG FIO_VERSION=3.33-3
+RUN apt-get update && \
+    apt-get install -y tini fio=${FIO_VERSION} && \
+    rm -rf /var/lib/apt/lists/*
 
 ENTRYPOINT ["tini", "-g", "--"]
 # Install the setup and run scripts

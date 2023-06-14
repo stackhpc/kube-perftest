@@ -3,7 +3,7 @@
 # https://www.intel.com/content/www/us/en/develop/documentation/imb-user-guide/top.html
 #####
 
-FROM rockylinux:8.6
+FROM rockylinux:9.2
 
 ARG MPITESTS_VERSION=5.8
 RUN yum install -y \
