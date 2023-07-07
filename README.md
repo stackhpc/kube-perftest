@@ -17,6 +17,12 @@
 
 ## Installation
 
+Requires a volcano.sh installation on the cluster, can be installed using
+
+```sh
+kubectl apply -f https://raw.githubusercontent.com/volcano-sh/volcano/master/installer/volcano-development.yaml
+```
+
 The `kube-perftest` operator can be installed using [Helm](https://helm.sh):
 
 ```sh
