@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 PROBLEM_SIZE=$1
 ITERATIVE_METHOD=$2
 NUM_PROCS=$3
