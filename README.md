@@ -296,6 +296,7 @@ spec:
 python3 -m venv venv
 source venv/bin/activate
 pip install -U pip
+pip install -r python/requirements.txt
 pip install -e python
 
 # Set the default image tag
