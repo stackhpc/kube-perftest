@@ -14,6 +14,7 @@ cp -r /opt/hpc/Lid_driven_cavity-3d/${PROBLEM_SIZE}/* /opt/benchmark
 ln -sf /opt/benchmark/system/fvSolution.${ITERATIVE_METHOD} /opt/benchmark/system/fvSolution
 mv /opt/benchmark/constant/transportProperties /opt/benchmark/constant/physicalProperties
 sed -i "s/^numberOfSubdomains.*/numberOfSubdomains ${NUM_PROCS};/g" /opt/benchmark/system/decomposeParDict
+sed -i "s/\(#includeFunc  solverInfo\)/\/\/ \1/" /opt/benchmark/system/controlDict # comment out solverInfo
 
 # Stage benchmark datafiles
 cd /opt/benchmark
