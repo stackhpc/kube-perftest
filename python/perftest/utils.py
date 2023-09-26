@@ -118,16 +118,31 @@ class GnuTimeResult(schema.BaseModel):
     user_time_secs: confloat(ge=0) = Field(description="The time spent executing user space code.")
     sys_time_secs: confloat(ge=0) = Field(description="The time spent executing system (kernel space) code.")
     cpu_percentage: float = Field(description="The (peak) percentage of CPU used.")
-    wall_time: str = Field(description="The wall clock time for this benchmark run.")
+    wall_time_secs: str = Field(description="The wall clock time for this benchmark run.")
         
     def parse(input: str):
         match = GNU_TIME_EXTRACTION_REGEX.search(input)
         if not match:
             raise PodLogFormatError("failed to parse output of GNU time command")
+        
+        # Convert wall time to seconds for consistency with other fields
+        # Default format is either 'hh:mm:ss.ss' or 'mm:ss.ss' depending on value
+        wall_time = match.group("wall_time")
+        try:
+            hrs_mins_secs, frac_secs = wall_time.split(".")
+            parts = hrs_mins_secs.split(":")
+            if len(parts) == 2:
+                hrs, mins, secs = 0, *parts
+            elif len(parts) == 3:
+                hrs, mins, secs = parts
+            wall_time_secs = float(hrs)*3600 + float(mins)*60 + float(secs) + float("0."+frac_secs)
+        except:
+            raise PodLogFormatError("failed to parse GNU wall time in format hh:mm:ss.ss or mm:ss.ss")
+
         return GnuTimeResult(
             command = match.group("command"),
             user_time_secs = match.group("user_time"),
             sys_time_secs = match.group("sys_time"),
             cpu_perecentage = match.group("cpu_percentage"),
-            wall_time = match.group("wall_time")
+            wall_time_secs = wall_time_secs,
         )
