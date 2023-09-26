@@ -117,7 +117,7 @@ class GnuTimeResult(schema.BaseModel):
     command: str = Field(description="The command being timed.")
     user_time_secs: confloat(ge=0) = Field(description="The time spent executing user space code.")
     sys_time_secs: confloat(ge=0) = Field(description="The time spent executing system (kernel space) code.")
-    cpu_precentage: float = Field(description="The (peak) percentage of CPU used.")
+    cpu_percentage: float = Field(description="The (peak) percentage of CPU used.")
     wall_time: str = Field(description="The wall clock time for this benchmark run.")
         
     def parse(input: str):
@@ -128,6 +128,6 @@ class GnuTimeResult(schema.BaseModel):
             command = match.group("command"),
             user_time_secs = match.group("user_time"),
             sys_time_secs = match.group("sys_time"),
-            cpu_precentage = match.group("cpu_percentage"),
+            cpu_perecentage = match.group("cpu_percentage"),
             wall_time = match.group("wall_time")
         )
