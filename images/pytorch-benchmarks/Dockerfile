@@ -7,7 +7,6 @@ WORKDIR /workspace/benchmark
 # Add other benchmarks here?
 RUN python install.py alexnet resnet50 llama
 
-# PyTorch install.py pins numpy=1.21.2 but this breaks numba so update both here
+# PyTorch install.py pins numpy=1.21.2 but
+# this breaks numba so update both here
 RUN pip install -U numpy numba
-
-COPY run-benchmark.sh /usr/local/bin/
