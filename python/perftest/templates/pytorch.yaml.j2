@@ -1,0 +1,36 @@
+{% import '_macros.j2' as macros %}
+---
+{% call macros.job(benchmark) -%}
+tasks:
+  - name: test
+    # Runs test pod
+    replicas: 1
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark) | indent(10) }}
+      spec:
+        {%- if benchmark.spec.host_network %}
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        {%- endif %}
+        restartPolicy: OnFailure
+        containers:
+        - name: pytorch-benchmark
+          {# TODO: Make this image/tag configurable elsewhere (tag latest doesn't seem to work for manual docker pulls) #}
+          image: ghcr.io/stackhpc/kube-perftest-pytorch-benchmarks:9ef66a8
+          command: 
+            - time
+            # - -v
+            # - -python3
+            # - run.py
+            # - {{ benchmark.spec.model }}
+          args: ["-v", "python3", "run.py", {{ benchmark.spec.model }}, "-t", {{ benchmark.spec.benchmark_type }}, "-d", {{ benchmark.spec.device }}, "--bs", "{{ benchmark.spec.input_batch_size}}"]
+          {% if benchmark.spec.device != "cpu" %}
+          resources:
+            limits:
+              nvidia.com/gpu: {{ benchmark.spec.gpu_count if benchmark.spec.gpu_count else (0 if benchmark.spec.device == "cpu" else 1) }}
+          {% endif %}
+        # The workers should avoid pods from other benchmarks
+        {{ macros.distribution_spread(benchmark) | indent(8) }}
+{%- endcall %}
