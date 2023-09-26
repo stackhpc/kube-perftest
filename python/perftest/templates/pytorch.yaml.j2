@@ -10,10 +10,6 @@ tasks:
         labels:
           {{ macros.labels(benchmark) | indent(10) }}
       spec:
-        {%- if benchmark.spec.host_network %}
-        hostNetwork: true
-        dnsPolicy: ClusterFirstWithHostNet
-        {%- endif %}
         restartPolicy: OnFailure
         containers:
         - name: pytorch-benchmark
