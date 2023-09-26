@@ -1,6 +1,10 @@
 import functools
 import math
+import re
 import typing as t
+from kube_custom_resource import schema
+from pydantic import Field, confloat
+from .errors import PodLogFormatError
 
 
 def mergeconcat(
@@ -71,3 +75,59 @@ def format_amount(
         formatted_amount = f"{integer_part}.{fractional_part}"
     prefix_index = prefixes.index(original_prefix) + exponent
     return (formatted_amount, prefixes[prefix_index])
+
+
+GNU_TIME_EXTRACTION_REGEX = re.compile(
+    r"\s*Command being timed:\s+\"(?P<command>.+)\""
+    r"\s+User time \(seconds\):\s+(?P<user_time>\d+\.\d+)"
+    r"\s+System time \(seconds\):\s+(?P<sys_time>\d+\.\d+)"
+    r"\s+Percent of CPU this job got:\s+(?P<cpu_percentage>\d+)\%"
+    r"\s+Elapsed \(wall clock\) time \(h:mm:ss or m:ss\):\s+(?P<wall_time>\d*:*\d+:\d+\.\d+)"
+)
+
+class GnuTimeResult(schema.BaseModel):
+    """
+    Helper class for parsing the output of the gnu time wrapper. Example output
+    from (verbose mode) `/usr/bin/time -v`:
+        Command being timed: "sleep 2"
+        User time (seconds): 0.00
+        System time (seconds): 0.00
+        Percent of CPU this job got: 0%
+        Elapsed (wall clock) time (h:mm:ss or m:ss): 0:02.00
+        Average shared text size (kbytes): 0
+        Average unshared data size (kbytes): 0
+        Average stack size (kbytes): 0
+        Average total size (kbytes): 0
+        Maximum resident set size (kbytes): 1612
+        Average resident set size (kbytes): 0
+        Major (requiring I/O) page faults: 0
+        Minor (reclaiming a frame) page faults: 67
+        Voluntary context switches: 2
+        Involuntary context switches: 0
+        Swaps: 0
+        File system inputs: 0
+        File system outputs: 0
+        Socket messages sent: 0
+        Socket messages received: 0
+        Signals delivered: 0
+        Page size (bytes): 4096
+        Exit status: 0
+    """
+    # Add other fields here as needed
+    command: str = Field(description="The command being timed.")
+    user_time_secs: confloat(ge=0) = Field(description="The time spent executing user space code.")
+    sys_time_secs: confloat(ge=0) = Field(description="The time spent executing system (kernel space) code.")
+    cpu_precentage: float = Field(description="The (peak) percentage of CPU used.")
+    wall_time: str = Field(description="The wall clock time for this benchmark run.")
+        
+    def parse(input: str):
+        match = GNU_TIME_EXTRACTION_REGEX.search(input)
+        if not match:
+            raise PodLogFormatError("failed to parse output of GNU time command")
+        return GnuTimeResult(
+            command = match.group("command"),
+            user_time_secs = match.group("user_time"),
+            sys_time_secs = match.group("sys_time"),
+            cpu_precentage = match.group("cpu_percentage"),
+            wall_time = match.group("wall_time")
+        )
