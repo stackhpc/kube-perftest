@@ -117,8 +117,8 @@ class GnuTimeResult(schema.BaseModel):
     command: str = Field(description="The command being timed.")
     user_time_secs: confloat(ge=0) = Field(description="The time spent executing user space code.")
     sys_time_secs: confloat(ge=0) = Field(description="The time spent executing system (kernel space) code.")
-    cpu_percentage: float = Field(description="The (peak) percentage of CPU used.")
-    wall_time_secs: str = Field(description="The wall clock time for this benchmark run.")
+    cpu_percentage: confloat(ge=0) = Field(description="The (peak) percentage of CPU used.")
+    wall_time_secs: confloat(ge=0) = Field(description="The wall clock time for this benchmark run.")
         
     def parse(input: str):
         match = GNU_TIME_EXTRACTION_REGEX.search(input)
@@ -143,6 +143,6 @@ class GnuTimeResult(schema.BaseModel):
             command = match.group("command"),
             user_time_secs = match.group("user_time"),
             sys_time_secs = match.group("sys_time"),
-            cpu_perecentage = match.group("cpu_percentage"),
+            cpu_percentage = match.group("cpu_percentage"),
             wall_time_secs = wall_time_secs,
         )
