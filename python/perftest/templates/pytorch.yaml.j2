@@ -10,7 +10,7 @@ tasks:
         labels:
           {{ macros.labels(benchmark) | indent(10) }}
       spec:
-        restartPolicy: OnFailure
+        restartPolicy: Never
         containers:
         - name: pytorch-benchmark
           {# TODO: Make this image/tag configurable elsewhere (tag latest doesn't seem to work for manual docker pulls) #}
