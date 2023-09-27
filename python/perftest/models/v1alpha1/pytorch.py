@@ -221,9 +221,11 @@ class Pytorch(
         fetch_pod_log: t.Callable[[], t.Awaitable[str]]
     ):  
         # Set default GPU count if none given in spec
-        gpu_count = pod.get("status", {}).get("gpuCount")
-        if gpu_count is None:
+        # (have to do this in status since spec is immutable)
+        if self.spec.gpu_count is None:
             self.status.gpu_count = (0 if self.spec.device == "cpu" else 1)
+        else:
+            self.status.gpu_count = self.spec.gpu_count
 
         pod_phase = pod.get("status", {}).get("phase", "Unknown")
         if pod_phase == "Running":
