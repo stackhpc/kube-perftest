@@ -27,7 +27,7 @@ class Device(str, schema.Enum):
     CPU = "cpu"
     CUDA = "cuda"
 
-# NOTE: List of models here should match list in images/pytorch-benchmark/Dockerfile
+# List of models here should match list in images/pytorch-benchmark/Dockerfile
 class PytorchModel(str, schema.Enum):
     """
     Eumeration available models for benchmarking.
@@ -43,18 +43,19 @@ class PytorchBenchmarkType(str, schema.Enum):
     TRAIN = "train"
     EVAL = "eval"
 
+
 class PytorchSpec(base.BenchmarkSpec):
     """
     Defines the parameters for the Fio benchmark.
     """
-    # image: constr(min_length = 1) = Field(
-    #     f"{settings.default_image_prefix}fio:{settings.default_image_tag}",
-    #     description = "The image to use for the benchmark."
-    # )
-    # image_pull_policy: base.ImagePullPolicy = Field(
-    #     base.ImagePullPolicy.IF_NOT_PRESENT,
-    #     description = "The pull policy for the image."
-    # )
+    image: constr(min_length = 1) = Field(
+        f"{settings.default_image_prefix}pytorch-benchmarks:{settings.default_image_tag}",
+        description = "The image to use for the benchmark."
+    )
+    image_pull_policy: base.ImagePullPolicy = Field(
+        base.ImagePullPolicy.IF_NOT_PRESENT,
+        description = "The pull policy for the image."
+    )
     # Pytorch benchmark config options
     device: Device = Field(
         Device.CPU,
@@ -74,31 +75,39 @@ class PytorchSpec(base.BenchmarkSpec):
     gpu_count: t.Optional[conint(ge=1)] = Field(
         None,
         description = "Number of GPUs to request for the benchmark run. Defaults to 0 for device = cpu and 1 for device = cuda."
-    )            
+    )
         
 
 class PytorchResult(schema.BaseModel):
     """
     Represents an individual Pytorch benchmark result.
+    
+    Some notes on the inner workings of the pytorch benchmark script:
+    - Currently only runs one batch for benchmark so 'time per batch' in pytorch output == total time.
+      (This may change in future since 'per batch' suffix was added to output text very recently.)
+      https://github.com/pytorch/benchmark/blob/6fef32ddaf93a63088b97eb27620fb57ef247521/run.py#L468
+    - CPU 'wall time' reported by pytorch is significantly shorter than reported by GNU `time` command.
+      It's not clear what is taking up this extra time outwith the actual model invocation (downloading
+      model weights and generating random in-memory input data shouldn't take long at all).
     """
-    cpu_wall_time: schema.confloat(ge = 0) = Field(
+    pytorch_time: schema.confloat(ge = 0) = Field(
         ...,
-        description = "The CPU wall time (in seconds) per batch as reported by the pytorch benchmark script."
+        description = "The CPU wall time (in seconds) as reported by the pytorch benchmark script."
     )
-    peak_cpu_memory: schema.confloat(ge = 0) = Field(
+    peak_cpu_memory_GB: schema.confloat(ge = 0) = Field(
         ...,
         description = "The peak CPU memory usage (in GB) reported by the pytorch benchmark script."
     )
-    gpu_wall_time: t.Optional[schema.confloat(ge = 0)] = Field(
+    gpu_time: t.Optional[schema.confloat(ge = 0)] = Field(
         None, # Default to zero for clearer reporting on cpu-only runs
         description = "The GPU wall time (in seconds) reported by the pytorch benchmark script."
     )
-    peak_gpu_memory: t.Optional[schema.confloat(ge = 0)] = Field(
+    peak_gpu_memory_GB: t.Optional[schema.confloat(ge = 0)] = Field(
         None, # Default to zero for clearer reporting on cpu-only runs
         description = "The peak GPU memory usage (in GB) reported by the pytorch benchmark script."
     )
     gnu_time: GnuTimeResult = Field(
-        description = "The output of the `time` command which wraps the benchmark execution script."
+        description = "A container for the output of the `time` command which wraps the benchmark execution script."
     )
     
 
@@ -114,10 +123,10 @@ class PytorchStatus(base.BenchmarkStatus):
         None,
         description = "The result of the benchmark."
     )
-    cpu_time_result: schema.confloat(ge = 0) = Field(
+    wall_time_result: schema.confloat(ge = 0) = Field(
         None,
         description = (
-            "The CPU wall time (in seconds) reported by the pytorch benchmark script."
+            "The wall time (in seconds) reported by the GNU time wrapper."
             "Used as a headline result."
         )
     )
@@ -171,11 +180,21 @@ class Pytorch(
             "name": "Status",
             "type": "string",
             "jsonPath": ".status.phase",
-        },        
+        },
         {
-            "name": "CPU Wall Time (s)",
+            "name": "Started",
+            "type": "date",
+            "jsonPath": ".status.startedAt",
+        },
+        {
+            "name": "Finished",
+            "type": "date",
+            "jsonPath": ".status.finishedAt",
+        },
+        {
+            "name": "Wall Time (s)",
             "type": "number",
-            "jsonPath": ".status.cpuTimeResult",
+            "jsonPath": ".status.wallTimeResult",
         },
         {
             "name": "GPU Time (s)",
@@ -250,14 +269,14 @@ class Pytorch(
         
         # Convert times to seconds to match GNU time output
         self.status.result = PytorchResult(
-            cpu_wall_time = float(cpu_time) / 1000,
-            peak_cpu_memory = cpu_peak_memory,
-            gpu_wall_time = gpu_time,
-            peak_gpu_memory = gpu_peak_memory,
+            pytorch_time = float(cpu_time) / 1000,
+            peak_cpu_memory_GB = cpu_peak_memory,
+            gpu_time = gpu_time,
+            peak_gpu_memory_GB = gpu_peak_memory,
             gnu_time = gnu_time_result,
         )
 
         # Format results nicely for printing
-        self.status.cpu_time_result = float(f"{self.status.result.cpu_wall_time:.3g}")
-        if self.status.result.gpu_wall_time:
-            self.status.gpu_time_result = float(f"{self.status.result.gpu_wall_time:.3g}")
+        self.status.wall_time_result = float(f"{self.status.result.gnu_time.wall_time_secs:.3g}")
+        if self.status.result.gpu_time:
+            self.status.gpu_time_result = float(f"{self.status.result.gpu_time:.3g}")

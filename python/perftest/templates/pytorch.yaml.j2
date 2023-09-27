@@ -17,10 +17,6 @@ tasks:
           image: ghcr.io/stackhpc/kube-perftest-pytorch-benchmarks:9ef66a8
           command: 
             - time
-            # - -v
-            # - -python3
-            # - run.py
-            # - {{ benchmark.spec.model }}
           args: ["-v", "python3", "run.py", {{ benchmark.spec.model }}, "-t", {{ benchmark.spec.benchmark_type }}, "-d", {{ benchmark.spec.device }}, "--bs", "{{ benchmark.spec.input_batch_size}}"]
           {% if benchmark.spec.device != "cpu" %}
           resources:
