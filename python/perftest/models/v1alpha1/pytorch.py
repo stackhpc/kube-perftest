@@ -30,7 +30,7 @@ class Device(str, schema.Enum):
 # List of models here should match list in images/pytorch-benchmark/Dockerfile
 class PytorchModel(str, schema.Enum):
     """
-    Eumeration available models for benchmarking.
+    Enumeration of available models for benchmarking.
     """
     ALEXNET = "alexnet"
     RESNET50 = "resnet50"
@@ -220,8 +220,7 @@ class Pytorch(
         pod: t.Dict[str, t.Any],
         fetch_pod_log: t.Callable[[], t.Awaitable[str]]
     ):  
-        # Set default GPU count if none given in spec
-        # (have to do this in status since spec is immutable)
+        # Set default GPU count to display in status if none given in spec
         if self.spec.gpu_count is None:
             self.status.gpu_count = (0 if self.spec.device == "cpu" else 1)
         else:
