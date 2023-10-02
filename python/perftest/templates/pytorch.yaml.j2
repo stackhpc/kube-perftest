@@ -2,9 +2,13 @@
 ---
 {% call macros.job(benchmark) -%}
 tasks:
-  - name: test
-    # Runs test pod
+  - name: pytorch-worker
     replicas: 1
+    policies:
+    - event: PodFailed
+      action: RestartJob
+    - event: PodEvicted
+      action: RestartJob
     template:
       metadata:
         labels:
@@ -13,16 +17,16 @@ tasks:
         restartPolicy: Never
         containers:
         - name: pytorch-benchmark
-          {# TODO: Make this image/tag configurable elsewhere (tag latest doesn't seem to work for manual docker pulls) #}
-          image: ghcr.io/stackhpc/kube-perftest-pytorch-benchmarks:9ef66a8
-          command: 
-            - time
+          image: {{ benchmark.spec.image }}
+          imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+          command: ["time"]
           args: ["-v", "python3", "run.py", {{ benchmark.spec.model }}, "-t", {{ benchmark.spec.benchmark_type }}, "-d", {{ benchmark.spec.device }}, "--bs", "{{ benchmark.spec.input_batch_size}}"]
-          {% if benchmark.spec.device != "cpu" %}
+          {% if benchmark.spec.device == "cuda" %}
           resources:
             limits:
-              nvidia.com/gpu: {{ benchmark.spec.gpu_count if benchmark.spec.gpu_count else (0 if benchmark.spec.device == "cpu" else 1) }}
+              # Default to single GPU for CUDA runs
+              nvidia.com/gpu: {{ benchmark.spec.gpu_count if benchmark.spec.gpu_count else 1 }}
           {% endif %}
-        # The workers should avoid pods from other benchmarks
+        # Avoid pods from other benchmarks
         {{ macros.distribution_spread(benchmark) | indent(8) }}
 {%- endcall %}

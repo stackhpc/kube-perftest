@@ -166,8 +166,6 @@ spec:
   queue: {{ settings.queue_name }}
   priorityClassName: {{ benchmark.status.priority_class_name }}
   policies:
-    - event: PodFailed
-      action: RestartJob
     - event: PodEvicted
       action: RestartJob
   {{ caller() | indent(2) }}
