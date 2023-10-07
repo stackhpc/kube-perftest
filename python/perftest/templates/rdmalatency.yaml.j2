@@ -38,6 +38,7 @@ tasks:
               - ib_{{ benchmark.spec.mode }}_lat
               - -a
               - -F
+              - -R
               - -n
               - "{{ benchmark.spec.iterations }}"
               {%- for arg in benchmark.spec.extra_args %}
@@ -91,6 +92,7 @@ tasks:
               - ib_{{ benchmark.spec.mode }}_lat
               - -a
               - -F
+              - -R
               - -n
               - "{{ benchmark.spec.iterations }}"
               {%- for arg in benchmark.spec.extra_args %}
