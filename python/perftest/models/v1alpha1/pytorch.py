@@ -28,7 +28,7 @@ class Device(str, schema.Enum):
     CUDA = "cuda"
 
 # List of models here should match list in images/pytorch-benchmark/Dockerfile
-class PytorchModel(str, schema.Enum):
+class PyTorchModel(str, schema.Enum):
     """
     Enumeration of available models for benchmarking.
     """
@@ -36,7 +36,7 @@ class PytorchModel(str, schema.Enum):
     RESNET50 = "resnet50"
     LLAMA = "llama"
     
-class PytorchBenchmarkType(str, schema.Enum):
+class PyTorchBenchmarkType(str, schema.Enum):
     """
     Enumeration of model processes available to benchmark.
     """
@@ -44,7 +44,7 @@ class PytorchBenchmarkType(str, schema.Enum):
     EVAL = "eval"
 
 
-class PytorchSpec(base.BenchmarkSpec):
+class PyTorchSpec(base.BenchmarkSpec):
     """
     Defines the parameters for the Fio benchmark.
     """
@@ -56,31 +56,31 @@ class PytorchSpec(base.BenchmarkSpec):
         base.ImagePullPolicy.IF_NOT_PRESENT,
         description = "The pull policy for the image."
     )
-    # Pytorch benchmark config options
+    # PyTorch benchmark config options
     device: Device = Field(
         Device.CPU,
-        description = "The device to run the ML workload."
+        description = (
+            "The device to run the ML workload."
+            "If device is 'cuda' then you must also make a request for GPU resources by"
+            "adding a 'nvidia.com/gpu: <gpu-count>' field to benchmark.spec.resources.limits"
+        )
     )
-    model: PytorchModel = Field(
+    model: PyTorchModel = Field(
         description = "The ML model to benchmark."
     )
-    benchmark_type: PytorchBenchmarkType = Field(
-        PytorchBenchmarkType.EVAL,
+    benchmark_type: PyTorchBenchmarkType = Field(
+        PyTorchBenchmarkType.EVAL,
         description = "Whether to benchmark the training or inference (eval) process."
     )
     input_batch_size: conint(multiple_of=2, ge=2) = Field(
         64,
         description = "The batch size for the generated model input data.",
     )
-    gpu_count: t.Optional[conint(ge=1)] = Field(
-        None,
-        description = "Number of GPUs to request for the benchmark run. Defaults to 0 for device = cpu and 1 for device = cuda."
-    )
-        
+            
 
-class PytorchResult(schema.BaseModel):
+class PyTorchResult(schema.BaseModel):
     """
-    Represents an individual Pytorch benchmark result.
+    Represents an individual PyTorch benchmark result.
     
     Some notes on the inner workings of the pytorch benchmark script:
     - Currently only runs one batch for benchmark so 'time per batch' in pytorch output == total time.
@@ -94,7 +94,7 @@ class PytorchResult(schema.BaseModel):
         ...,
         description = "The CPU wall time (in seconds) as reported by the pytorch benchmark script."
     )
-    peak_cpu_memory_GB: schema.confloat(ge = 0) = Field(
+    peak_cpu_memory: schema.confloat(ge = 0) = Field(
         ...,
         description = "The peak CPU memory usage (in GB) reported by the pytorch benchmark script."
     )
@@ -102,7 +102,7 @@ class PytorchResult(schema.BaseModel):
         None, # Default to zero for clearer reporting on cpu-only runs
         description = "The GPU wall time (in seconds) reported by the pytorch benchmark script."
     )
-    peak_gpu_memory_GB: t.Optional[schema.confloat(ge = 0)] = Field(
+    peak_gpu_memory: t.Optional[schema.confloat(ge = 0)] = Field(
         None, # Default to zero for clearer reporting on cpu-only runs
         description = "The peak GPU memory usage (in GB) reported by the pytorch benchmark script."
     )
@@ -111,15 +111,15 @@ class PytorchResult(schema.BaseModel):
     )
     
 
-class PytorchStatus(base.BenchmarkStatus):
+class PyTorchStatus(base.BenchmarkStatus):
     """
-    Represents the status of the Pytorch benchmark.
+    Represents the status of the PyTorch benchmark.
     """
     gpu_count: conint(ge=0) = Field(
         None,
         description = "The number of gpus used in this benchmark"
     )
-    result: t.Optional[PytorchResult] = Field(
+    result: t.Optional[PyTorchResult] = Field(
         None,
         description = "The result of the benchmark."
     )
@@ -147,7 +147,7 @@ class PytorchStatus(base.BenchmarkStatus):
     )
 
 
-class Pytorch(
+class PyTorch(
     base.Benchmark,
     subresources = {"status": {}},
     printer_columns = [
@@ -204,14 +204,14 @@ class Pytorch(
     ]
 ):
     """
-    Custom resource for running an Pytorch benchmark.
+    Custom resource for running an PyTorch benchmark.
     """
-    spec: PytorchSpec = Field(
+    spec: PyTorchSpec = Field(
         ...,
         description = "The parameters for the benchmark."
     )
-    status: PytorchStatus = Field(
-        default_factory = PytorchStatus,
+    status: PyTorchStatus = Field(
+        default_factory = PyTorchStatus,
         description = "The status of the benchmark."
     )
 
@@ -220,11 +220,13 @@ class Pytorch(
         pod: t.Dict[str, t.Any],
         fetch_pod_log: t.Callable[[], t.Awaitable[str]]
     ):  
-        # Set default GPU count to display in status if none given in spec
-        if self.spec.gpu_count is None:
-            self.status.gpu_count = (0 if self.spec.device == "cpu" else 1)
+        # Parse GPU count from resources to display in status
+        if self.spec.resources:
+            if self.spec.resources.limits:
+                if 'nvidia.com/gpu' in self.spec.resources.limits.keys():
+                    self.status.gpu_count = self.spec.resources.limits['nvidia.com/gpu']
         else:
-            self.status.gpu_count = self.spec.gpu_count
+            self.status.gpu_count = 0
 
         pod_phase = pod.get("status", {}).get("phase", "Unknown")
         if pod_phase == "Running":
@@ -238,26 +240,30 @@ class Pytorch(
             raise PodResultsIncompleteError("Pod has not recorded a result yet")
 
         # Parse job output here
-        cpu_time = PYTORCH_CPU_TIME_REGEX.search(self.status.client_log).group('cpu_time')
-        cpu_time_units = PYTORCH_CPU_TIME_REGEX.search(self.status.client_log).group('cpu_time_units')
-        cpu_peak_memory = PYTORCH_CPU_MEMORY_REGEX.search(self.status.client_log).group('cpu_memory')
-        cpu_peak_memory_units = PYTORCH_CPU_MEMORY_REGEX.search(self.status.client_log).group('cpu_mem_units')
+        cpu_time_match = PYTORCH_CPU_TIME_REGEX.search(self.status.client_log)
+        cpu_time = cpu_time_match.group('cpu_time')
+        cpu_time_units = cpu_time_match.group('cpu_time_units')
+        cpu_memory_match = PYTORCH_CPU_MEMORY_REGEX.search(self.status.client_log)
+        cpu_peak_memory = cpu_memory_match.group('cpu_memory')
+        cpu_peak_memory_units = cpu_memory_match.group('cpu_mem_units')
 
         if cpu_time_units != "milliseconds" or cpu_peak_memory_units != "GB":
             raise PodLogFormatError(
-                "results output in unexpected units"
+                "results output in unexpected units - expected 'milliseconds' and 'GB'"
                 "(it's possible that results formatting has changed in upstream pytorch-benchmarks)"
             )
 
         if self.spec.device != "cpu":
             # Parse GPU results
-            gpu_time = PYTORCH_GPU_TIME_REGEX.search(self.status.client_log).group('gpu_time')
-            gpu_peak_memory = PYTORCH_GPU_MEMORY_REGEX.search(self.status.client_log).group('gpu_memory')
-            gpu_time_units = PYTORCH_GPU_TIME_REGEX.search(self.status.client_log).group('gpu_time_units')
-            gpu_peak_memory_units = PYTORCH_GPU_MEMORY_REGEX.search(self.status.client_log).group('gpu_mem_units')
+            gpu_time_match = PYTORCH_GPU_TIME_REGEX.search(self.status.client_log)
+            gpu_time = gpu_time_match.group('gpu_time')
+            gpu_time_units = gpu_time_match.group('gpu_time_units')
+            gpu_memory_match = PYTORCH_GPU_MEMORY_REGEX.search(self.status.client_log)
+            gpu_peak_memory = gpu_memory_match.group('gpu_memory')
+            gpu_peak_memory_units = gpu_memory_match.group('gpu_mem_units')
             if gpu_time_units != "milliseconds" or gpu_peak_memory_units != "GB":
                 raise PodLogFormatError(
-                    "results output in unexpected units"
+                    "results output in unexpected units - expected 'milliseconds' and 'GB'"
                     "(it's possible that results formatting has changed in upstream pytorch-benchmarks)"
                 )
             # Convert times to seconds to match GNU time output    
@@ -269,11 +275,11 @@ class Pytorch(
         gnu_time_result = GnuTimeResult.parse(self.status.client_log)
         
         # Convert times to seconds to match GNU time output
-        self.status.result = PytorchResult(
+        self.status.result = PyTorchResult(
             pytorch_time = float(cpu_time) / 1000,
-            peak_cpu_memory_GB = cpu_peak_memory,
+            peak_cpu_memory = cpu_peak_memory,
             gpu_time = gpu_time,
-            peak_gpu_memory_GB = gpu_peak_memory,
+            peak_gpu_memory = gpu_peak_memory,
             gnu_time = gnu_time_result,
         )
 

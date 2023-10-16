@@ -20,13 +20,21 @@ tasks:
           image: {{ benchmark.spec.image }}
           imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
           command: ["time"]
-          args: ["-v", "python3", "run.py", {{ benchmark.spec.model }}, "-t", {{ benchmark.spec.benchmark_type }}, "-d", {{ benchmark.spec.device }}, "--bs", "{{ benchmark.spec.input_batch_size}}"]
-          {% if benchmark.spec.device == "cuda" %}
+          args: 
+            - -v
+            - python3
+            - run.py
+            - "{{ benchmark.spec.model }}"
+            - -t 
+            - "{{ benchmark.spec.benchmark_type }}"
+            - -d 
+            - "{{ benchmark.spec.device }}"
+            - --bs
+            - "{{ benchmark.spec.input_batch_size}}"
+          {%- if benchmark.spec.resources %}
           resources:
-            limits:
-              # Default to single GPU for CUDA runs
-              nvidia.com/gpu: {{ benchmark.spec.gpu_count if benchmark.spec.gpu_count else 1 }}
-          {% endif %}
+            {{ benchmark.spec.resources | toyaml | indent(12) }}
+          {%- endif %}
         # Avoid pods from other benchmarks
         {{ macros.distribution_spread(benchmark) | indent(8) }}
 {%- endcall %}

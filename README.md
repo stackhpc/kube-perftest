@@ -13,7 +13,7 @@
   - [RDMA Bandwidth](#rdma-bandwidth)
   - [RDMA Latency](#rdma-latency)
   - [fio](#fio)
-  - [Pytorch](#Pytorch)
+  - [PyTorch](#PyTorch)
 - [Operator development](#operator-development)
 
 ## Installation
@@ -290,10 +290,10 @@ spec:
         storage: 5Gi
 ```
 
-### Pytorch
+### PyTorch
 
 Runs machine learning model training and inference micro-benchmarks from the official 
-Pytorch [benchmarks repo](https://github.com/pytorch/benchmark/) to compare performance
+PyTorch [benchmarks repo](https://github.com/pytorch/benchmark/) to compare performance
 of CPU and GPU devices on synthetic input data. Running benchmarks on CUDA-capable
 devices requires the [Nvidia GPU Operator](https://github.com/NVIDIA/gpu-operator) 
 to be pre-installed on the target Kubernetes cluster.
@@ -302,11 +302,11 @@ The pre-built container image currently includes the `alexnet`, `resnet50` and
 `llama` (inference only) models - additional models from the 
 [upstream repo list](https://github.com/pytorch/benchmark/tree/main/torchbenchmark/models)
 may be added as needed in the future. (Adding a new model simply requires adding it to the list
-in `images/pytorch-benchmark/Dockerfile` and updating the `PytorchModel` enum in `pytorch.py`.)
+in `images/pytorch-benchmark/Dockerfile` and updating the `PyTorchModel` enum in `pytorch.py`.)
 
 ```yaml
 apiVersion: perftest.stackhpc.com/v1alpha1
-kind: Pytorch
+kind: PyTorch
 metadata:
   name: pytorch-test-gpu
 spec:

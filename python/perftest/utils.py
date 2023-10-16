@@ -120,7 +120,8 @@ class GnuTimeResult(schema.BaseModel):
     cpu_percentage: confloat(ge=0) = Field(description="The (peak) percentage of CPU used.")
     wall_time_secs: confloat(ge=0) = Field(description="The wall clock time for this benchmark run.")
         
-    def parse(input: str):
+    @classmethod
+    def parse(cls, input: str):
         match = GNU_TIME_EXTRACTION_REGEX.search(input)
         if not match:
             raise PodLogFormatError("failed to parse output of GNU time command")
