@@ -319,9 +319,9 @@ spec:
   benchmarkType: eval
   # Batch size for generated input data
   inputBatchSize: 32
-  # Count defaults to 0 for device == cpu
-  # or 1 for device == cuda
-  gpuCount: 2
+  resources:
+    limits:
+      nvidia.com/gpu: 2
 ```
 
 
