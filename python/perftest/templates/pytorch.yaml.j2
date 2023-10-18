@@ -1,0 +1,40 @@
+{% import '_macros.j2' as macros %}
+---
+{% call macros.job(benchmark) -%}
+tasks:
+  - name: pytorch-worker
+    replicas: 1
+    policies:
+    - event: PodFailed
+      action: RestartJob
+    - event: PodEvicted
+      action: RestartJob
+    template:
+      metadata:
+        labels:
+          {{ macros.labels(benchmark) | indent(10) }}
+      spec:
+        restartPolicy: Never
+        containers:
+        - name: pytorch-benchmark
+          image: {{ benchmark.spec.image }}
+          imagePullPolicy: {{ benchmark.spec.image_pull_policy }}
+          command: ["time"]
+          args: 
+            - -v
+            - python3
+            - run.py
+            - "{{ benchmark.spec.model }}"
+            - -t 
+            - "{{ benchmark.spec.benchmark_type }}"
+            - -d 
+            - "{{ benchmark.spec.device }}"
+            - --bs
+            - "{{ benchmark.spec.input_batch_size}}"
+          {%- if benchmark.spec.resources %}
+          resources:
+            {{ benchmark.spec.resources | toyaml | indent(12) }}
+          {%- endif %}
+        # Avoid pods from other benchmarks
+        {{ macros.distribution_spread(benchmark) | indent(8) }}
+{%- endcall %}

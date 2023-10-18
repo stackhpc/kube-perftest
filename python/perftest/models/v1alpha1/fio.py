@@ -262,7 +262,7 @@ class Fio(
     ]
 ):
     """
-    Custom resource for running an iperf benchmark.
+    Custom resource for running a fio benchmark.
     """
     spec: FioSpec = Field(
         ...,
