@@ -14,7 +14,7 @@ httpcore==0.15.0
 httpx==0.23.0
 idna==3.3
 iso8601==1.0.2
-Jinja2==3.1.2
+Jinja2==3.1.5
 kopf==1.35.6
 kube-custom-resource @ git+https://github.com/stackhpc/kube-custom-resource.git@851b1bf25fecdbc180e73494eb77c7899274ee15
 MarkupSafe==2.1.1
