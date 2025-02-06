@@ -3,7 +3,7 @@
 # https://www.intel.com/content/www/us/en/develop/documentation/imb-user-guide/top.html
 #####
 
-FROM rockylinux:9.5
+FROM quay.io/rockylinux/rockylinux:9.5
 
 RUN yum install -y \
       openssh-clients openssh-server \
