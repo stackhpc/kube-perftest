@@ -3,7 +3,7 @@ aiosignal==1.2.0
 anyio==3.6.1
 async-timeout==4.0.2
 attrs==22.1.0
-certifi==2022.6.15
+certifi==2024.7.4
 charset-normalizer==2.1.1
 click==8.1.3
 configomatic @ git+https://github.com/stackhpc/configomatic.git@3a7e88693e8f44530ac4f1f5ee3d64977cf3784d
