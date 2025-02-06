@@ -18,6 +18,7 @@ jobs:
       packages: write         # required for pushing container images
       security-events: write  # required for pushing SARIF files
     strategy:
+      fail-fast: false
       matrix:
         include:
           - component: discovery
