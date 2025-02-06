@@ -26,6 +26,7 @@ rules:
       - rdmabandwidths.perftest.stackhpc.com
       - rdmalatencies.perftest.stackhpc.com
       - fios.perftest.stackhpc.com
+      - pytorchs.perftest.stackhpc.com
     verbs:
       - update
       - patch
