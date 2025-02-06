@@ -27,7 +27,8 @@ jobs:
           - component: mpi-benchmarks
           - component: openfoam
           - component: perftest
-          - component: pytorch-benchmarks
+          # TODO - need to fix this build
+          # - component: pytorch-benchmarks
     steps:
       - name: Check out the repository
         uses: actions/checkout@v2
