@@ -9,7 +9,7 @@ certifi==2025.1.31
 charset-normalizer==3.4.1
 click==8.1.8
 configomatic @ git+https://github.com/stackhpc/configomatic.git@3a7e88693e8f44530ac4f1f5ee3d64977cf3784d
-easykube==0.5.0
+easykube @ git+https://github.com/stackhpc/easykube.git@f8212a0b412b1eb2d7d015508b0ee49b6c2a5eb2
 frozenlist==1.5.0
 h11==0.14.0
 httpcore==1.0.7
