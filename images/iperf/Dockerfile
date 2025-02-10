@@ -5,7 +5,6 @@
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
-    apt-get upgrade && \
     apt-get install -y "iperf" && \
     rm -rf /var/lib/apt/lists/*
 
