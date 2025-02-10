@@ -2,9 +2,8 @@
 # Dockerfile for the RDMA bandwidth and latency benchmarks
 #####
 
-FROM rockylinux:9.2
+FROM quay.io/rockylinux/rockylinux:9.5
 
-ARG PERFTEST_VERSION=4.5.0.20
-RUN yum install -y "perftest-${PERFTEST_VERSION}" && \
+RUN yum install -y perftest && \
     yum clean all -y && \
     rm -rf /var/cache

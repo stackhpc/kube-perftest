@@ -12,7 +12,13 @@ jobs:
   build_push_images:
     name: Build and push benchmark images
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write         # needed for signing the images with GitHub OIDC Token
+      packages: write         # required for pushing container images
+      security-events: write  # required for pushing SARIF files
     strategy:
+      fail-fast: false
       matrix:
         include:
           - component: discovery
@@ -21,7 +27,8 @@ jobs:
           - component: mpi-benchmarks
           - component: openfoam
           - component: perftest
-          - component: pytorch-benchmarks
+          # TODO - need to fix this build
+          # - component: pytorch-benchmarks
     steps:
       - name: Check out the repository
         uses: actions/checkout@v2
