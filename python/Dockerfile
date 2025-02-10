@@ -9,11 +9,9 @@ RUN apt-get update && \
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY ./requirements.txt /perftest/
+COPY . /perftest
 RUN pip install -U pip setuptools
 RUN pip install --no-deps --requirement /perftest/requirements.txt
-
-COPY . /perftest
 RUN pip install -e /perftest
 
 #
@@ -28,6 +26,8 @@ RUN apt-get update && \
 
 # Copy accross the venv
 COPY --from=build-image /opt/venv /opt/venv
+# Copy code to keep editable install working
+COPY . /perftest
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Create the user that will be used to run the app
