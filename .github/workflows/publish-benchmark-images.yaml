@@ -31,10 +31,10 @@ jobs:
           # - component: pytorch-benchmarks
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -42,7 +42,7 @@ jobs:
 
       - name: Calculate metadata for image
         id: image-meta
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v5
         with:
           images: ghcr.io/stackhpc/kube-perftest-${{ matrix.component }}
           # Produce the branch name or tag and the SHA as tags
