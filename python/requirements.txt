@@ -21,7 +21,7 @@ kopf==1.37.4
 kube-custom-resource @ git+https://github.com/stackhpc/kube-custom-resource.git@851b1bf25fecdbc180e73494eb77c7899274ee15
 MarkupSafe==3.0.2
 multidict==6.1.0
-propcache==0.2.1
+propcache==0.3.0
 pydantic==1.10.21
 pydantic_core==2.27.2
 python-json-logger==3.2.1
