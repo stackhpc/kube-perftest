@@ -11,7 +11,7 @@ click==8.1.8
 configomatic @ git+https://github.com/stackhpc/configomatic.git@3a7e88693e8f44530ac4f1f5ee3d64977cf3784d
 easykube==0.5.0
 frozenlist==1.5.0
-h11==0.14.0
+h11==0.16.0
 httpcore==1.0.7
 httpx==0.28.1
 idna==3.10
