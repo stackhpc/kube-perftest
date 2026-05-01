@@ -3,7 +3,7 @@ import itertools
 import math
 import typing as t
 
-from pydantic import Field, constr
+from pydantic import Field
 
 from kube_custom_resource import CustomResource, schema
 
@@ -14,15 +14,15 @@ class BenchmarkSetTemplate(schema.BaseModel):
     """
     Defines the shape of a template for a benchmark set.
     """
-    api_version: constr(regex = r"^" + settings.api_group) = Field(
+    api_version: schema.constr(pattern = r"^" + settings.api_group) = Field(
         ...,
         description = "The API version of the benchmark to create."
     )
-    kind: constr(min_length = 1) = Field(
+    kind: schema.constr(min_length = 1) = Field(
         ...,
         description = "The kind of the benchmark to create."
     )
-    spec: schema.Dict[str, t.Any] = Field(
+    spec: schema.Dict[str, schema.Any] = Field(
         default_factory = dict,
         description = "The fixed part of the spec for the benchmark."
     )
@@ -40,7 +40,7 @@ class BenchmarkSetPermutations(schema.BaseModel):
             "Permutations are generated using the cross-product of the given keys/values."
         )
     )
-    explicit: t.List[schema.Dict[str, t.Any]] = Field(
+    explicit: t.List[schema.Dict[str, schema.Any]] = Field(
         default_factory = list,
         description = "A list of explicit permutations to use."
     )
@@ -95,11 +95,11 @@ class BenchmarkSetStatus(schema.BaseModel):
     """
     Represents the status of a benchmark set.
     """
-    permutation_count: t.Optional[schema.conint(ge = 0)] = Field(
+    permutation_count: schema.Optional[schema.conint(ge = 0)] = Field(
         None,
         description = "The number of permutations in the set."
     )
-    count: t.Optional[schema.conint(ge = 0)] = Field(
+    count: schema.Optional[schema.conint(ge = 0)] = Field(
         None,
         description = "The number of benchmarks in the set."
     )
@@ -110,15 +110,15 @@ class BenchmarkSetStatus(schema.BaseModel):
             "benchmark was successful or not."
         )
     )
-    succeeded: t.Optional[schema.conint(ge = 0)] = Field(
+    succeeded: schema.Optional[schema.conint(ge = 0)] = Field(
         None,
         description = "The number of benchmarks that have completed successfully."
     )
-    failed: t.Optional[schema.conint(ge = 0)] = Field(
+    failed: schema.Optional[schema.conint(ge = 0)] = Field(
         None,
         description = "The number of benchmarks that have failed."
     )
-    finished_at: t.Optional[datetime.datetime] = Field(
+    finished_at: schema.Optional[datetime.datetime] = Field(
         None,
         description = "The time at which the benchmark finished."
     )

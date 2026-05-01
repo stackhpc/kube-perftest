@@ -2,7 +2,7 @@ import itertools as it
 import re
 import typing as t
 
-from pydantic import Field, constr
+from pydantic import Field
 
 from kube_custom_resource import schema
 
@@ -17,7 +17,7 @@ class IPerfSpec(base.BenchmarkSpec):
     """
     Defines the parameters for the iperf benchmark.
     """
-    image: constr(min_length = 1) = Field(
+    image: schema.constr(min_length = 1) = Field(
         f"{settings.default_image_prefix}iperf:{settings.default_image_tag}",
         description = "The image to use for the benchmark."
     )
@@ -67,23 +67,23 @@ class IPerfStatus(base.BenchmarkStatus):
     """
     Represents the status of the iperf benchmark.
     """
-    summary_result: t.Optional[schema.IntOrString] = Field(
+    summary_result: schema.Optional[schema.IntOrString] = Field(
         None,
         description = "The summary result for the benchmark, used for display."
     )
-    result: t.Optional[IPerfResult] = Field(
+    result: schema.Optional[IPerfResult] = Field(
         None,
         description = "The complete result for the benchmark."
     )
-    client_log: t.Optional[constr(min_length = 1)] = Field(
+    client_log: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = "The raw pod log of the client pod."
     )
-    server_pod: t.Optional[base.PodInfo] = Field(
+    server_pod: schema.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the server pod."
     )
-    client_pod: t.Optional[base.PodInfo] = Field(
+    client_pod: schema.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the client pod."
     )

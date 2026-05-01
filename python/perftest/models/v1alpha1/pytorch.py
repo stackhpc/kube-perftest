@@ -1,8 +1,7 @@
 import re
-import datetime as dt
 import typing as t
 
-from pydantic import Field, constr, conint
+from pydantic import Field
 
 from kube_custom_resource import schema
 
@@ -11,6 +10,7 @@ from ...errors import PodLogFormatError, PodResultsIncompleteError
 from ...utils import GnuTimeResult
 
 from . import base
+
 
 # If results output format changes in future pytorch-benchmark versions
 # check https://github.com/pytorch/benchmark/blob/main/run.py for changes
@@ -27,6 +27,7 @@ class Device(str, schema.Enum):
     CPU = "cpu"
     CUDA = "cuda"
 
+
 # List of models here should match list in images/pytorch-benchmark/Dockerfile
 class PyTorchModel(str, schema.Enum):
     """
@@ -36,6 +37,7 @@ class PyTorchModel(str, schema.Enum):
     RESNET50 = "resnet50"
     LLAMA = "llama"
     
+
 class PyTorchBenchmarkType(str, schema.Enum):
     """
     Enumeration of model processes available to benchmark.
@@ -48,7 +50,7 @@ class PyTorchSpec(base.BenchmarkSpec):
     """
     Defines the parameters for the Fio benchmark.
     """
-    image: constr(min_length = 1) = Field(
+    image: schema.constr(min_length = 1) = Field(
         f"{settings.default_image_prefix}pytorch-benchmarks:{settings.default_image_tag}",
         description = "The image to use for the benchmark."
     )
@@ -66,13 +68,14 @@ class PyTorchSpec(base.BenchmarkSpec):
         )
     )
     model: PyTorchModel = Field(
+        ...,
         description = "The ML model to benchmark."
     )
     benchmark_type: PyTorchBenchmarkType = Field(
         PyTorchBenchmarkType.EVAL,
         description = "Whether to benchmark the training or inference (eval) process."
     )
-    input_batch_size: conint(multiple_of=2, ge=2) = Field(
+    input_batch_size: schema.conint(multiple_of = 2, ge = 2) = Field(
         64,
         description = "The batch size for the generated model input data.",
     )
@@ -98,11 +101,11 @@ class PyTorchResult(schema.BaseModel):
         ...,
         description = "The peak CPU memory usage (in GB) reported by the pytorch benchmark script."
     )
-    gpu_time: t.Optional[schema.confloat(ge = 0)] = Field(
+    gpu_time: schema.Optional[schema.confloat(ge = 0)] = Field(
         None, # Default to zero for clearer reporting on cpu-only runs
         description = "The GPU wall time (in seconds) reported by the pytorch benchmark script."
     )
-    peak_gpu_memory: t.Optional[schema.confloat(ge = 0)] = Field(
+    peak_gpu_memory: schema.Optional[schema.confloat(ge = 0)] = Field(
         None, # Default to zero for clearer reporting on cpu-only runs
         description = "The peak GPU memory usage (in GB) reported by the pytorch benchmark script."
     )
@@ -115,11 +118,11 @@ class PyTorchStatus(base.BenchmarkStatus):
     """
     Represents the status of the PyTorch benchmark.
     """
-    gpu_count: conint(ge=0) = Field(
+    gpu_count: schema.conint(ge=0) = Field(
         None,
         description = "The number of gpus used in this benchmark"
     )
-    result: t.Optional[PyTorchResult] = Field(
+    result: schema.Optional[PyTorchResult] = Field(
         None,
         description = "The result of the benchmark."
     )
@@ -137,11 +140,11 @@ class PyTorchStatus(base.BenchmarkStatus):
             "Used as a headline result."
         )
     )
-    worker_pod: t.Optional[base.PodInfo] = Field(
+    worker_pod: schema.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the pod running the benchmark."
     )
-    client_log: t.Optional[constr(min_length = 1)] = Field(
+    client_log: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = "The raw pod log of the client pod."
     )

@@ -1,7 +1,7 @@
 import re
 import typing as t
 
-from pydantic import Field, constr
+from pydantic import Field
 
 from kube_custom_resource import schema
 
@@ -49,7 +49,7 @@ class OpenFOAMSpec(base.BenchmarkSpec):
     """
     Defines the parameters for the openFOAM benchmark.
     """
-    image: constr(min_length = 1) = Field(
+    image: schema.constr(min_length = 1) = Field(
         f"{settings.default_image_prefix}openfoam:{settings.default_image_tag}",
         description = "The image to use for the benchmark."
     )
@@ -105,11 +105,11 @@ class OpenFOAMStatus(base.BenchmarkStatus):
     """
     Represents the status of the iperf benchmark.
     """
-    result: t.Optional[OpenFOAMResult] = Field(
+    result: schema.Optional[OpenFOAMResult] = Field(
         None,
         description = "The result of the benchmark."
     )
-    master_pod: t.Optional[base.PodInfo] = Field(
+    master_pod: schema.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the MPI master pod."
     )

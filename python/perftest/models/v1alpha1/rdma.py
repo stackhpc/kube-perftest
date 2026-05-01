@@ -2,7 +2,7 @@ import itertools as it
 import re
 import typing as t
 
-from pydantic import Field, constr
+from pydantic import Field
 
 from kube_custom_resource import schema
 
@@ -57,7 +57,7 @@ class RDMASpec(base.BenchmarkSpec):
     """
     Defines the common parameters for RDMA benchmarks.
     """
-    image: constr(min_length = 1) = Field(
+    image: schema.constr(min_length = 1) = Field(
         f"{settings.default_image_prefix}perftest:{settings.default_image_tag}",
         description = "The image to use for the benchmark."
     )
@@ -73,7 +73,7 @@ class RDMASpec(base.BenchmarkSpec):
         1000,
         description = "The number of iterations for each message size."
     )
-    extra_args: t.List[constr(min_length = 1)] = Field(
+    extra_args: t.List[schema.constr(min_length = 1)] = Field(
         default_factory = list,
         description = "Extra arguments for the command."
     )
@@ -83,15 +83,15 @@ class RDMAStatus(base.BenchmarkStatus):
     """
     Base class for the status of an RDMA benchmark.
     """
-    client_log: t.Optional[constr(min_length = 1)] = Field(
+    client_log: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = "The raw pod log of the client pod."
     )
-    server_pod: t.Optional[base.PodInfo] = Field(
+    server_pod: schema.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the server pod."
     )
-    client_pod: t.Optional[base.PodInfo] = Field(
+    client_pod: schema.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the client pod."
     )
@@ -181,7 +181,7 @@ class RDMABandwidthStatus(RDMAStatus):
         default_factory = list,
         description = "List of results for each message length."
     )
-    peak_bandwidth: t.Optional[constr(min_length = 1)] = Field(
+    peak_bandwidth: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = (
             "The peak bandwidth achieved during the benchmark. "
@@ -352,7 +352,7 @@ class RDMALatencyStatus(RDMAStatus):
         default_factory = list,
         description = "List of results for each message length."
     )
-    minimum_average_latency: t.Optional[constr(min_length = 1)] = Field(
+    minimum_average_latency: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = (
             "The minimum average latency for any message length. "

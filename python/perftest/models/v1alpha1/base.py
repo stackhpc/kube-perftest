@@ -2,7 +2,7 @@ import datetime
 import ipaddress
 import typing as t
 
-from pydantic import Field, constr
+from pydantic import Field
 
 from kube_custom_resource import CustomResource, schema
 
@@ -22,11 +22,11 @@ class ContainerResources(schema.BaseModel):
     """
     Model for specifying container resources.
     """
-    requests: schema.Dict[str, t.Any] = Field(
+    requests: schema.Dict[str, schema.Any] = Field(
         default_factory = dict,
         description = "The resource requests for the pod."
     )
-    limits: schema.Dict[str, t.Any] = Field(
+    limits: schema.Dict[str, schema.Any] = Field(
         default_factory = dict,
         description = "The resource limits for the pod."
     )
@@ -40,18 +40,18 @@ class BenchmarkSpec(schema.BaseModel):
         False,
         description = "Indicates whether to use host networking or not."
     )
-    network_name: t.Optional[constr(min_length = 1)] = Field(
+    network_name: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = (
             "The name of a Multus network over which to run the benchmark. "
             "Only used when host networking is false."
         )
     )
-    resources: t.Optional[ContainerResources] = Field(
+    resources: schema.Optional[ContainerResources] = Field(
         None,
         description = "The resources to use for benchmark containers."
     )
-    mtu: t.Optional[schema.conint(gt = 0)] = Field(
+    mtu: schema.Optional[schema.conint(gt = 0)] = Field(
         None,
         description = (
             "The MTU to use for the benchmark. "
@@ -96,15 +96,15 @@ class ResourceRef(schema.BaseModel):
     """
     Reference to a resource that is part of a benchmark.
     """
-    api_version: constr(min_length = 1) = Field(
+    api_version: schema.constr(min_length = 1) = Field(
         ...,
         description = "The API version of the resource."
     )
-    kind: constr(min_length = 1) = Field(
+    kind: schema.constr(min_length = 1) = Field(
         ...,
         description = "The kind of the resource."
     )
-    name: constr(min_length = 1) = Field(
+    name: schema.constr(min_length = 1) = Field(
         ...,
         description = "The name of the resource."
     )
@@ -118,7 +118,7 @@ class PodInfo(schema.BaseModel):
         ...,
         description = "The IP of the pod."
     )
-    node_name: constr(min_length = 1) = Field(
+    node_name: schema.constr(min_length = 1) = Field(
         ...,
         description = "The name of the node that the pod was scheduled on."
     )
@@ -147,7 +147,7 @@ class BenchmarkStatus(schema.BaseModel):
         BenchmarkPhase.UNKNOWN,
         description = "The phase of the benchmark."
     )
-    priority_class_name: t.Optional[constr(min_length = 1)] = Field(
+    priority_class_name: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = "The name of the priority class for the benchmark."
     )
@@ -155,11 +155,11 @@ class BenchmarkStatus(schema.BaseModel):
         default_factory = list,
         description = "List of references to the managed resources for this benchmark."
     )
-    started_at: t.Optional[datetime.datetime] = Field(
+    started_at: schema.Optional[datetime.datetime] = Field(
         None,
         description = "The time at which the benchmark started."
     )
-    finished_at: t.Optional[datetime.datetime] = Field(
+    finished_at: schema.Optional[datetime.datetime] = Field(
         None,
         description = "The time at which the benchmark finished."
     )

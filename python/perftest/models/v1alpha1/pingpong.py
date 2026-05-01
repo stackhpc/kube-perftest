@@ -2,7 +2,7 @@ import itertools as it
 import re
 import typing as t
 
-from pydantic import Field, constr
+from pydantic import Field
 
 from kube_custom_resource import schema
 
@@ -10,6 +10,7 @@ from ...config import settings
 from ...errors import PodLogFormatError, PodResultsIncompleteError
 
 from . import base
+
 
 MPI_PINGPONG_UNITS = re.compile(
     r"t\[(?P<time>[^\]]+)\]"
@@ -40,7 +41,7 @@ class MPIPingPongSpec(base.BenchmarkSpec):
     """
     Defines the parameters for the iperf benchmark.
     """
-    image: constr(min_length = 1) = Field(
+    image: schema.constr(min_length = 1) = Field(
         f"{settings.default_image_prefix}mpi-benchmarks:{settings.default_image_tag}",
         description = "The image to use for the benchmark."
     )
@@ -91,11 +92,11 @@ class MPIPingPongStatus(base.BenchmarkStatus):
     """
     Represents the status of the iperf benchmark.
     """
-    bandwidth_units: t.Optional[constr(min_length = 1)] = Field(
+    bandwidth_units: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = "The units that the bandwidth is reported in."
     )
-    time_units: t.Optional[constr(min_length = 1)] = Field(
+    time_units: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = "The units that the time is reported in."
     )
@@ -103,25 +104,25 @@ class MPIPingPongStatus(base.BenchmarkStatus):
         default_factory = list,
         description = "List of results for each message length."
     )
-    peak_bandwidth: t.Optional[constr(min_length = 1)] = Field(
+    peak_bandwidth: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = (
             "The peak bandwidth achieved during the benchmark for any given message length. "
             "Used as a headline result."
         )
     )
-    minimum_latency: t.Optional[constr(min_length = 1)] = Field(
+    minimum_latency: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = (
             "The minimum latency achieved during the benchmark for any given message length. "
             "Used as a headline result."
         )
     )
-    master_log: t.Optional[constr(min_length = 1)] = Field(
+    master_log: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = "The raw pod log of the MPI master pod."
     )
-    master_pod: t.Optional[base.PodInfo] = Field(
+    master_pod: schema.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the MPI master pod."
     )

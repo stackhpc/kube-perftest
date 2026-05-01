@@ -1,9 +1,7 @@
-import itertools as it
 import json
-import re
 import typing as t
 
-from pydantic import Field, constr
+from pydantic import Field
 
 from kube_custom_resource import schema
 
@@ -12,6 +10,7 @@ from ...errors import PodLogFormatError, PodResultsIncompleteError
 from ...utils import format_amount
 
 from . import base
+
 
 class FioRW(str, schema.Enum):
     """
@@ -24,6 +23,7 @@ class FioRW(str, schema.Enum):
     RW_READWRITE = "rw,readwrite"
     RANDRW = "randrw"
 
+
 class FioDirect(int, schema.Enum):
     """
     Enumeration of supported Fio direct Bools.
@@ -31,17 +31,19 @@ class FioDirect(int, schema.Enum):
     TRUE = 1
     FALSE = 0
 
+
 class FioIOEngine(str, schema.Enum):
     """
     Enumeration of supported Fio ioengines.
     """
     LIBAIO = "libaio"
 
+
 class FioSpec(base.BenchmarkSpec):
     """
     Defines the parameters for the Fio benchmark.
     """
-    image: constr(min_length = 1) = Field(
+    image: schema.constr(min_length = 1) = Field(
         f"{settings.default_image_prefix}fio:{settings.default_image_tag}",
         description = "The image to use for the benchmark."
     )
@@ -53,7 +55,7 @@ class FioSpec(base.BenchmarkSpec):
         8765,
         description = "The port that the Fio sever listens on."
     )
-    volume_claim_template: schema.Dict[str, t.Any] = Field(
+    volume_claim_template: schema.Dict[str, schema.Any] = Field(
         default_factory = dict,
         description = "The template that describes the PVC to mount on workers."
     )
@@ -66,7 +68,7 @@ class FioSpec(base.BenchmarkSpec):
         FioRW.READ,
         description = "The value of the Fio rw config option."
     )
-    bs: constr(regex = "\\d+(K|M|G|T|P)?") = Field(
+    bs: schema.constr(pattern = "\\d+(K|M|G|T|P)?") = Field(
         "4M",
         description = "The value of the Fio bs config option."
     )
@@ -98,7 +100,7 @@ class FioSpec(base.BenchmarkSpec):
         FioIOEngine.LIBAIO,
         description = "The value of the Fio ioengine config option."
     )
-    runtime: constr(regex = "\\d+(D|H|M|s|ms|us)?") = Field(
+    runtime: schema.constr(pattern = "\\d+(D|H|M|s|ms|us)?") = Field(
         "30s",
         description = "The value of the Fio runtime config option."
     )
@@ -106,7 +108,7 @@ class FioSpec(base.BenchmarkSpec):
         1,
         description = "The value of the Fio numjobs config option."
     )
-    size: constr(regex = "\\d+(K|M|G|T|P)?") = Field(
+    size: schema.constr(pattern = "\\d+(K|M|G|T|P)?") = Field(
         "10G",
         description = "The value of the Fio size config option."
     )
@@ -152,32 +154,33 @@ class FioResult(schema.BaseModel):
         ...,
         description = "The aggregate read latency standard deviation."
     )
-    
+
+
 class FioStatus(base.BenchmarkStatus):
     """
     Represents the status of the Fio benchmark.
     """
-    result: t.Optional[FioResult] = Field(
+    result: schema.Optional[FioResult] = Field(
         None,
         description = "The result of the benchmark."
     )
-    read_bw_result: t.Optional[schema.IntOrString] = Field(
+    read_bw_result: schema.Optional[schema.IntOrString] = Field(
         None,
         description = "The summary result for read bw, used for display."
     )
-    write_bw_result: t.Optional[schema.IntOrString] = Field(
+    write_bw_result: schema.Optional[schema.IntOrString] = Field(
         None,
         description = "The summary result for write bw, used for display."
     )
-    read_iops_result: t.Optional[schema.confloat(ge = 0)] = Field(
+    read_iops_result: schema.Optional[schema.confloat(ge = 0)] = Field(
         None,
         description = "The summary result for read IOPs, used for display."
     )
-    write_iops_result: t.Optional[schema.confloat(ge = 0)] = Field(
+    write_iops_result: schema.Optional[schema.confloat(ge = 0)] = Field(
         None,
         description = "The summary result for write IOPs, used for display."
     )
-    master_pod: t.Optional[base.PodInfo] = Field(
+    master_pod: schema.Optional[base.PodInfo] = Field(
         None,
         description = "Pod information for the Fio master pod."
     )
@@ -185,10 +188,11 @@ class FioStatus(base.BenchmarkStatus):
         default_factory = dict,
         description = "Pod information for the worker pods, indexed by pod name."
     )
-    client_log: t.Optional[constr(min_length = 1)] = Field(
+    client_log: schema.Optional[schema.constr(min_length = 1)] = Field(
         None,
         description = "The raw pod log of the client pod."
     )
+
 
 class Fio(
     base.Benchmark,
